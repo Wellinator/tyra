@@ -7,6 +7,7 @@
 # Licenced under Apache License 2.0
 # Sandro Sobczyński <sandro.sobczynski@gmail.com>
 # André Guilherme <andregui17@outlook.com>
+# Wellington Carvalho <wellcoj@gmail.com>
 */
 
 #include "../include/loaders/mdl_loader.hpp"

@@ -7,10 +7,11 @@
 # Licenced under Apache License 2.0
 # Sandro Sobczyński <sandro.sobczynski@gmail.com>
 # André Guilherme <andregui17@outlook.com>
+# Wellington Carvalho <wellcoj@gmail.com>
 */
-
 #ifndef TYRA_MD_LOADER_HPP
 #define TYRA_MD_LOADER_HPP
+
 #include "../models/mesh_frame.hpp"
 #include "../modules/file_manager.hpp"
 #include "md2_structure.hpp"

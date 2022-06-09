@@ -3,9 +3,10 @@
 #   |     \/   ____| |___|
 #   |     |   |   \  |   |
 #-----------------------------------------------------------------------
-# Copyright 2020, tyra - https://github.com/h4570/tyra
+# Copyright 2020 - 2022, tyra - https://github.com/h4570/tyra
 # Licenced under Apache License 2.0
 # Sandro Sobczyński <sandro.sobczynski@gmail.com>
+# Wellington Carvalho <wellcoj@gmail.com> and André Guilherme <andregui17@outlook.com>
 */
 
 #include "include/engine.hpp"
@@ -101,24 +102,37 @@ void Engine::waitUntilUsbDeviceIsReady()
 
     delay(5); // some delay is required by usb mass storage driver
 
-    while (ret != 0 && retries > 0)
+    while(ret != 0 && retries > 0)
     {
         ret = stat("mass:/", &buffer);
         /* Wait until the device is ready */
         nopdelay();
-
         retries--;
     }
 }
 
+void Engine::WaitForHdd()
+{
+    struct stat buffer;
+    int ret;
+    int retries;
+
+    //Do this need delay i think so, since it´s not usb :)
+    while(ret =! 1 && retries > 0)
+    {
+        ret = stat("hdd:/", &buffer);
+
+        retries--;
+    }
+
+}
+
 void Engine::loadExternalModules()
 {
-
     consoleLog("Loading external modules...\n");
-    int i, ret, sometime;
+    int ret;
 
     SifInitRpc(0);
-
     // Apply the SBV LMB patch to allow modules to be loaded from a buffer in EE RAM.
     consoleLog("Applying SBV Patches...\n");
     ret = sbv_patch_enable_lmb();
@@ -142,21 +156,20 @@ void Engine::loadExternalModules()
 
     // Load USB mass modules
     consoleLog("Loading USB modules\n");
-
-    SifExecModuleBuffer(&usbd_irx, size_usbd_irx, 0, NULL, &ret);
+    ret = SifExecModuleBuffer(&usbd_irx, size_usbd_irx, 0, NULL, &ret);
     if (ret < 0)
     {
         consoleLog("Failed to load module: usbd");
     }
 
-    SifExecModuleBuffer(&usbhdfsd_irx, size_usbhdfsd_irx, 0, NULL, &ret);
+    ret = SifExecModuleBuffer(&usbhdfsd_irx, size_usbhdfsd_irx, 0, NULL, &ret);
     if (ret < 0)
     {
         consoleLog("Failed to load module: usbhdfsd");
     }
 
-    waitUntilUsbDeviceIsReady();
-    
+    Engine::waitUntilUsbDeviceIsReady();
+    Engine::WaitForHdd();    
     printf("modules load OK\n");
 }
 

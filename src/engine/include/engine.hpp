@@ -3,9 +3,10 @@
 #   |     \/   ____| |___|    
 #   |     |   |   \  |   |       
 #-----------------------------------------------------------------------
-# Copyright 2020, tyra - https://github.com/h4570/tyra
+# Copyright 2020 - 2022, tyra - https://github.com/h4570/tyra
 # Licenced under Apache License 2.0
 # Sandro Sobczyński <sandro.sobczynski@gmail.com>
+# Wellington Carvalho <wellcoj@gmail.com> and André Guilherme <andregui17@outlook.com>
 */
 
 #ifndef _TYRA_ENGINE_
@@ -34,8 +35,10 @@
 extern u8 usbd_irx[];
 extern int size_usbd_irx;
 
-extern u8  usbhdfsd_irx;
+extern u8  usbhdfsd_irx[];
 extern int size_usbhdfsd_irx;
+
+
 
 class Engine
 {
@@ -48,6 +51,7 @@ public:
     void init(Game *t_game, u32 t_gifPacketSize);
     void setDefaultScreen();
     void waitUntilUsbDeviceIsReady();
+    void WaitForHdd();
     Renderer *renderer;
     // FileService fileService;
     Audio audio;

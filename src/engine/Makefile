@@ -5,10 +5,10 @@ BIN2S = $(PS2SDK)/bin/bin2s
 IOP_MODULES = 	embed/libsd.o \
 				embed/usbd.o \
 				embed/usbhdfsd.o \
+				embed/ps2hdd.o \
 				embed/audsrv.o
 
 EE_OBJS =								\
-	$(IOP_MODULES)						\
 	models/math/matrix.o				\
 	models/math/plane.o					\
 	models/math/point.o					\
@@ -41,9 +41,22 @@ EE_OBJS =								\
 	vu1_progs/draw3D.o					\
 	engine.o
 
-all: $(EE_OBJS) 
+
+# Taken from my ps2doom fork: https://github.com/Doom-modding-and-etc/ps2doom/blob/Dev
+EMBED_DIR = embed/
+
+OBJS_DIR = objects/
+
+$(EMBED_DIR):
+	@mkdir -p $@
+
+$(OBJS_DIR):
+	@mkdir -p $@
+
+all: $(EE_OBJS) $(OBJS_DIR) $(EMBED_DIR) $(IOP_MODULES)
 	-T$(LINKFILE)
 	ar rcs $(LIB_NAME) $(EE_OBJS)
+	mv $(EE_OBJS) $(OBJS_DIR) 
 	rm -f $(EE_OBJS)
 
 # %.vcl: %.vclpp
@@ -74,5 +87,9 @@ embed/audsrv.s: $(PS2SDK)/iop/irx/audsrv.irx
 embed/usbhdfsd.s: $(PS2SDK)/iop/irx/usbhdfsd.irx
 	echo "Embedding USBHDFSD Driver..."
 	$(BIN2S) $< $@ usbhdfsd_irx
+
+embed/ps2hdd.s: $(PS2SDK)/iop/irx/ps2hdd.irx
+	echo "Embedding HDD Driver..."
+	$(BIN2S) $< $@ ps2hdd_irx
 
 include Makefile.pref

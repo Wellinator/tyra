@@ -2,9 +2,10 @@
 #   |     \/   ____| |___|    
 #   |     |   |   \  |   |       
 #-----------------------------------------------------------------------
-# Copyright 2021, tyra - https://github.com/h4570/tyra
+# Copyright 2021 - 2022, tyra - https://github.com/h4570/tyra
 # Licenced under Apache License 2.0
 # André Guilherme <andregui17@outlook.com>
+# Wellington Carvalho <wellcoj@gmail.com>
 
 TYRA_DIR = ./
 
@@ -15,11 +16,11 @@ BIN2S = $(PS2SDK)/bin/bin2s
 IOP_MODULES = 	src/engine/embed/libsd.o \
 				src/engine/embed/usbd.o \
 				src/engine/embed/usbhdfsd.o \
+				src/engine/embed/ps2hdd.o \
 				src/engine/embed/audsrv.o
 
 # ENGINE OBJECTS 
 ENGINE_OBJS = 									\
-				$(IOP_MODULES)					\
 				src/engine/engine.o \
 				src/engine/modules/audio.o \
 				src/engine/modules/camera_base.o \
@@ -65,10 +66,25 @@ EE_VCL = vcl
 
 EE_VCLPP = vclpp
 
-all: $(ENGINE_OBJS) 
-	ar rcs $(LIB_NAME) $(ENGINE_OBJS)
+EMBED_DIR = src/engine/embed/
+
+OBJS_DIR = src/engine/objects/
+
+# Taken from my ps2doom fork: https://github.com/Doom-modding-and-etc/ps2doom/blob/Dev
+$(EMBED_DIR):
+	@mkdir -p $@
+
+$(OBJS_DIR):
+	@mkdir -p $@
+
+all: $(ENGINE_OBJS) $(OBJS_DIR) $(EMBED_DIR) $(IOP_MODULES)
+	ar rcs $(LIB_NAME) 
+	mv $(ENGINE_OBJS) $(OBJS_DIR)
 	cp -f $(LIB_NAME) $(PS2SDK)/ee/lib
-	rm -f $(ENGINE_OBJS)
+
+clean:
+	rm -fr $(OBJS_DIR) $(EMBED_DIR)
+
 
 # Cube example
 cube:
@@ -87,7 +103,7 @@ rocket:
 
 # Rebuild the engine
 rebuild-engine: 
-	$(MAKE) -C src/engine && make && make EE_CXXFLAGS="-DNDEBUG $(EE_CXXFLAGS)"
+	$(MAKE) -C src/engine && make && make EE_CXXFLAGS= -DNDEBUG $(EE_CXXFLAGS)
 
 # Rebuild debug engine
 rebuild-dbg-engine: 
@@ -121,6 +137,10 @@ src/engine/embed/audsrv.s: $(PS2SDK)/iop/irx/audsrv.irx
 src/engine/embed/usbhdfsd.s: $(PS2SDK)/iop/irx/usbhdfsd.irx
 	echo "Embedding USBHDFSD Driver..."
 	$(BIN2S) $< $@ usbhdfsd_irx
-
+ 
+src/engine/embed/ps2hdd.s: $(PS2SDK)/iop/irx/ps2hdd.irx
+	echo "Embedding HDD Driver..."
+	$(BIN2S) $< $@ ps2hdd_irx
+	
 include $(PS2SDK)/samples/Makefile.pref
 include $(PS2SDK)/samples/Makefile.eeglobal
