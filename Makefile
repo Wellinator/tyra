@@ -16,10 +16,14 @@ BIN2S = $(PS2SDK)/bin/bin2s
 IOP_MODULES = 	src/engine/embed/libsd.o \
 				src/engine/embed/usbd.o \
 				src/engine/embed/usbhdfsd.o \
-				src/engine/embed/ps2hdd.o \
 				src/engine/embed/audsrv.o
 
-# ENGINE OBJECTS 
+ASM_MODULES = src/engine/embed/libsd.s \
+			  src/engine/embed/usbd.s \
+			  src/engine/embed/usbhdfsd.s \
+			  src/engine/embed/audsrv.s 
+
+
 ENGINE_OBJS = 									\
 				src/engine/engine.o \
 				src/engine/modules/audio.o \
@@ -52,9 +56,21 @@ ENGINE_OBJS = 									\
 				src/engine/loaders/png_loader.o \
 				src/engine/vu1_progs/draw3D.o \
 
+EMBED_DIR = src/engine/embed
+
+OBJS_DIR = src/engine/objects
+
+# Taken from my ps2doom fork: https://github.com/Doom-modding-and-etc/ps2doom/blob/Dev
+$(EMBED_DIR):	
+	@mkdir -p $@
+
+$(OBJS_DIR):	
+	@mkdir -p $@
+
+
 EE_LIBS := $(EE_LIBS) -lpatches -lfileXio -ldraw -lcdvd -lgraph -lmath3d -lpacket -ldma -lpacket2 -lpad -laudsrv -lc -lstdc++ -lpng -lz
 
-EE_INCS := -I$(PS2SDK)/ports/include -I$(PS2SDK)/ee/include -I$(PS2SDK)/common/include -I$(TYRA)/src/engine/include $(EE_INCS)
+EE_INCS := -I$(PS2SDK)/ports/include -I$(PS2SDK)/ee/include -I$(PS2SDK)/common/include -I$(TYRA)/src/engine/include -I/src/engine/include $(EE_INCS)
 
 EE_LDFLAGS := -L$(PS2SDK)/ports/lib -L$(TYRA)/src/engine $(EE_LDFLAGS)
 
@@ -66,25 +82,13 @@ EE_VCL = vcl
 
 EE_VCLPP = vclpp
 
-EMBED_DIR = src/engine/embed/
-
-OBJS_DIR = src/engine/objects/
-
-# Taken from my ps2doom fork: https://github.com/Doom-modding-and-etc/ps2doom/blob/Dev
-$(EMBED_DIR):
-	@mkdir -p $@
-
-$(OBJS_DIR):
-	@mkdir -p $@
-
 all: $(ENGINE_OBJS) $(OBJS_DIR) $(EMBED_DIR) $(IOP_MODULES)
 	ar rcs $(LIB_NAME) 
 	mv $(ENGINE_OBJS) $(OBJS_DIR)
 	cp -f $(LIB_NAME) $(PS2SDK)/ee/lib
 
-clean:
+clean: 
 	rm -fr $(OBJS_DIR) $(EMBED_DIR)
-
 
 # Cube example
 cube:
@@ -122,25 +126,21 @@ tests:
 %.o: %.vsm
 	$(EE_DVP) $< -o $@
 
-libsd.s: $(PS2SDK)/iop/irx/libsd.irx
+src/engine/embed/libsd.s: $(PS2SDK)/iop/irx/libsd.irx
 	echo "Embedding LIBDS..."
 	$(BIN2S) $< $@ libsd_irx
 
-usbd.s: $(PS2SDK)/iop/irx/usbd.irx
+src/engine/embed/usbd.s: $(PS2SDK)/iop/irx/usbd.irx
 	echo "Embedding USB Driver..."
 	$(BIN2S) $< $@ usbd_irx
 
-audsrv.s: $(PS2SDK)/iop/irx/audsrv.irx
+src/engine/embed/audsrv.s: $(PS2SDK)/iop/irx/audsrv.irx
 	echo "Embedding AUDSRV Driver..."
 	$(BIN2S) $< $@ audsrv_irx
 
-usbhdfsd.s: $(PS2SDK)/iop/irx/usbhdfsd.irx
+src/engine/embed/usbhdfsd.s: $(PS2SDK)/iop/irx/usbhdfsd.irx
 	echo "Embedding USBHDFSD Driver..."
 	$(BIN2S) $< $@ usbhdfsd_irx
  
-src/engine/embed/ps2hdd.s: $(PS2SDK)/iop/irx/ps2hdd.irx
-	echo "Embedding HDD Driver..."
-	$(BIN2S) $< $@ ps2hdd_irx
-	
 include $(PS2SDK)/samples/Makefile.pref
 include $(PS2SDK)/samples/Makefile.eeglobal

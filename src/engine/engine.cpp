@@ -111,22 +111,6 @@ void Engine::waitUntilUsbDeviceIsReady()
     }
 }
 
-void Engine::WaitForHdd()
-{
-    struct stat buffer;
-    int ret;
-    int retries;
-
-    //Do this need delay i think so, since it´s not usb :)
-    while(ret =! 1 && retries > 0)
-    {
-        ret = stat("hdd:/", &buffer);
-
-        retries--;
-    }
-
-}
-
 void Engine::loadExternalModules()
 {
     consoleLog("Loading external modules...\n");
@@ -168,8 +152,7 @@ void Engine::loadExternalModules()
         consoleLog("Failed to load module: usbhdfsd");
     }
 
-    Engine::waitUntilUsbDeviceIsReady();
-    Engine::WaitForHdd();    
+    waitUntilUsbDeviceIsReady();
     printf("modules load OK\n");
 }
 
