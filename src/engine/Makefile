@@ -58,6 +58,9 @@ all: $(EE_OBJS) $(OBJS_DIR) $(EMBED_DIR) $(IOP_MODULES)
 	ar rcs $(LIB_NAME) $(EE_OBJS)
 	mv $(EE_OBJS) $(OBJS_DIR) 
 	rm -f $(EE_OBJS)
+	rm -f $(IOP_MODULES)
+	rm -f *.s
+	echo "Success!"
 
 # %.vcl: %.vclpp
 #	 $(EE_VCLPP) $< $@
@@ -71,20 +74,21 @@ all: $(EE_OBJS) $(OBJS_DIR) $(EMBED_DIR) $(IOP_MODULES)
 clean:
 	rm -f $(EE_OBJS)
 	rm -f $(LIB_NAME)
+	rm -f *.s 
 
-embed/libsd.s: $(PS2SDK)/iop/irx/libsd.irx
+libsd.s: $(PS2SDK)/iop/irx/libsd.irx
 	echo "Embedding LIBDS..."
 	$(BIN2S) $< $@ libsd_irx
 
-embed/usbd.s: $(PS2SDK)/iop/irx/usbd.irx
+usbd.s: $(PS2SDK)/iop/irx/usbd.irx
 	echo "Embedding USB Driver..."
 	$(BIN2S) $< $@ usbd_irx
 
-embed/audsrv.s: $(PS2SDK)/iop/irx/audsrv.irx
+audsrv.s: $(PS2SDK)/iop/irx/audsrv.irx
 	echo "Embedding AUDSRV Driver..."
 	$(BIN2S) $< $@ audsrv_irx
 
-embed/usbhdfsd.s: $(PS2SDK)/iop/irx/usbhdfsd.irx
+usbhdfsd.s: $(PS2SDK)/iop/irx/usbhdfsd.irx
 	echo "Embedding USBHDFSD Driver..."
 	$(BIN2S) $< $@ usbhdfsd_irx
 
