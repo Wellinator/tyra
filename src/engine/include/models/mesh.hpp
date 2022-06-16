@@ -20,6 +20,7 @@
 #include <draw_buffers.h>
 #include <draw_sampling.h>
 #include "./anim_state.hpp"
+#include "modules/file_manager.hpp"
 
 /** 
  * Class which have contain 3D object data.
@@ -228,6 +229,7 @@ private:
     u8 _isMother, _areFramesAllocated;
     Vector3 calc3Vectors[3];
     void setDefaultLODAndClut();
+    FileManager fileManager;
 };
 
 #endif

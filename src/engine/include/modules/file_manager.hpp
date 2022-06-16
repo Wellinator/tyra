@@ -28,7 +28,7 @@ public:
     ~FileManager();
 
     /**
-     * Read file from source. If NDEBUG read from 'mass:' or 'hdd' also it  will read from 'host:'
+     * Read file from source. If NDEBUG read from 'mass:' or also it  will read from 'host:'
      * @returns FILE *
      */
     FILE *openFile(const char *t_subfolder, const char *t_name, const char *t_extension);

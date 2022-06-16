@@ -39,6 +39,7 @@ void Engine::setDefaultScreen()
     screen.nearPlaneDist = 2.0F;
     screen.farPlaneDist = 2000.0F;
     screen.fov = 60.0F;
+    //todo stuff: set other resolutions than the standard ones
     screen.width = 640.0F;
     screen.height = 480.0F;
     screen.aspectRatio = screen.width / screen.height;
@@ -114,6 +115,7 @@ void Engine::waitUntilUsbDeviceIsReady()
 void Engine::loadExternalModules()
 {
     consoleLog("Loading external modules...\n");
+    
     int ret;
 
     SifInitRpc(0);

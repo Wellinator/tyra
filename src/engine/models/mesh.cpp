@@ -63,8 +63,8 @@ void Mesh::loadObj(const char *t_subfolder, const char *t_objFile, const float &
     char *part1 = String::createConcatenated(t_subfolder, t_objFile); // "folder/object"
     char *finalPath = String::createConcatenated(part1, ".obj");      // "folder/object.obj"
     loader.load(&frames[0], finalPath, t_scale, t_invertT);
-    delete[] part1;
-    delete[] finalPath;
+    //delete[] part1;
+    //delete[] finalPath;
     _isMother = true;
 }
 
@@ -108,8 +108,8 @@ void Mesh::loadDff(const char *t_subfolder, const char *t_dffFile, const float &
     frames = new MeshFrame[1];
     _areFramesAllocated = true;
     loader.load(frames, dffPath, t_scale, t_invertT);
-    delete[] part1;
-    delete[] dffPath;
+    //delete[] part1;
+    //delete[] dffPath;
     _isMother = true;
 }
 
@@ -123,11 +123,8 @@ void Mesh::loadMD2(char *t_subfolder, char *t_md2File, const float &t_scale, con
 void Mesh::loadMD3(char *t_subfolder, char *t_md3File, const float &t_scale, const u8 &t_invertT) 
 {   
     MDLoader loader = MDLoader();
-    char *md3path = String::createConcatenated(t_subfolder, t_md3File);
-    char *md3 = String::createConcatenated(md3path, ".md3");
+    FILE *file = fileManager.openFile(t_subfolder, t_md3File);
     framesCount = 1;
-//    frames = loader.load_md3(framesCount, md3path, md3, t_scale, t_invertT);
-//    _isMother = true;
 };
 
 void Mesh::loadFrom(const Mesh &t_mesh)
