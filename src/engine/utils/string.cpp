@@ -3,9 +3,10 @@
 #   |     \/   ____| |___|    
 #   |     |   |   \  |   |       
 #-----------------------------------------------------------------------
-# Copyright 2020, tyra - https://github.com/h4570/tyra
+# Copyright 2020 - 2022, tyra - https://github.com/h4570/tyra
 # Licenced under Apache License 2.0
 # Sandro Sobczyński <sandro.sobczynski@gmail.com>
+# Wellington Carvalho <wellcoj@gmail.com> and André Guilherme <andregui17@outlook.com>
 */
 
 #include "../include/utils/string.hpp"
@@ -72,11 +73,48 @@ char *String::createConcatenated(const char *a, const char *b)
 {
     u32 aLength = getLength(a);
     u32 bLength = getLength(b);
+    
     char *res = new char[aLength + bLength + 1]; // + '\0'
     for (u32 i = 0; i < aLength; i++)
         res[i] = a[i];
     for (u32 i = 0; i < bLength; i++)
         res[aLength + i] = b[i];
     res[aLength + bLength] = '\0';
+    return res;
+}
+
+
+char *String::createConcatenated(const char *a, const char *b, const char *c)
+{
+    u32 aLength = getLength(a);
+    u32 bLength = getLength(b);
+    u32 cLength = getLength(c);
+
+    char *res = new char[aLength + bLength + cLength + 1]; // + '\0'
+    for (u32 i = 0; i < aLength; i++)
+        res[i] = a[i];
+    for (u32 i = 0; i < bLength; i++)
+        res[aLength + i] = b[i];
+    for (u32 i = 0; i < cLength; i++)
+        res[bLength + i] = c[i];
+}
+
+char *String::createConcatenated(const char *a, const char *b, const char *c, const char *d)
+{
+    u32 aLength = getLength(a);
+    u32 bLength = getLength(b);
+    u32 cLength = getLength(c);
+    u32 dLength = getLength(d);
+    
+    char *res = new char[aLength + bLength + cLength + dLength + 1]; // + '\0'
+    for (u32 i = 0; i < aLength; i++)
+        res[i] = a[i];
+    for (u32 i = 0; i < bLength; i++)
+        res[aLength + i] = b[i];
+    for (u32 i = 0; i < cLength; i++)
+        res[bLength + i] = c[i];
+    for (u32 i = 0; i < dLength; i++)
+        res[cLength + i] = d[i];
+    res[aLength + bLength + cLength + dLength] = '\0';
     return res;
 }

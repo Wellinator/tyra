@@ -60,11 +60,10 @@ void Mesh::loadObj(const char *t_subfolder, const char *t_objFile, const float &
     framesCount = 1;
     frames = new MeshFrame[framesCount];
     _areFramesAllocated = true;
-    char *part1 = String::createConcatenated(t_subfolder, t_objFile); // "folder/object"
-    char *finalPath = String::createConcatenated(part1, ".obj");      // "folder/object.obj"
+    //Provisory cleanup
+    char *finalPath = String::createConcatenated(t_subfolder, t_objFile, ".obj");      // "folder/object.obj"
     loader.load(&frames[0], finalPath, t_scale, t_invertT);
-    //delete[] part1;
-    //delete[] finalPath;
+    delete[] finalPath;
     _isMother = true;
 }
 
@@ -79,21 +78,17 @@ void Mesh::loadObj(const char *t_subfolder, const char *t_objFile, const float &
         framesCount = t_framesCount;
         frames = new MeshFrame[framesCount];
         _areFramesAllocated = true;
-        char *part1 = String::createConcatenated(t_subfolder, t_objFile); // "folder/object"
-        char *part2 = String::createConcatenated(part1, "_");             // "folder/object_"
+        char *part1 = String::createConcatenated(t_subfolder, t_objFile, "_"); // "folder/object_"
         for (u32 i = 0; i < framesCount; i++)
         {
-            char *part3 = String::createU32ToString(i + 1);              // 0 -> "1"
-            char *part4 = String::createWithLeadingZeros(part3);         // "000001"
-            char *part5 = String::createConcatenated(part2, part4);      // "folder/object_000001"
-            char *finalPath = String::createConcatenated(part5, ".obj"); // "folder/object_000001.obj"
+            char *part2 = String::createU32ToString(i + 1);              // 0 -> "1"
+            char *part3 = String::createWithLeadingZeros(part2);         // "000001"
+            char *finalPath = String::createConcatenated(part1, part2, part3, ".obj"); // "folder/object_000001.obj"
             loader.load(&frames[i], finalPath, t_scale, t_invertT);
+            delete[] part2;
             delete[] part3;
-            delete[] part4;
-            delete[] part5;
             delete[] finalPath;
         }
-        delete[] part2;
         delete[] part1;
         _isMother = true;
     }
@@ -108,8 +103,8 @@ void Mesh::loadDff(const char *t_subfolder, const char *t_dffFile, const float &
     frames = new MeshFrame[1];
     _areFramesAllocated = true;
     loader.load(frames, dffPath, t_scale, t_invertT);
-    //delete[] part1;
-    //delete[] dffPath;
+    delete[] part1;
+    delete[] dffPath;
     _isMother = true;
 }
 
@@ -123,7 +118,7 @@ void Mesh::loadMD2(char *t_subfolder, char *t_md2File, const float &t_scale, con
 void Mesh::loadMD3(char *t_subfolder, char *t_md3File, const float &t_scale, const u8 &t_invertT) 
 {   
     MDLoader loader = MDLoader();
-    FILE *file = fileManager.openFile(t_subfolder, t_md3File);
+    FILE *file = fileManager.openFile(t_subfolder, t_md3File, ".md3");
     framesCount = 1;
 };
 

@@ -14,11 +14,12 @@ FileManager::FileManager()
 {
     getcwd(cwd, sizeof(cwd));
     printf("Booting from %s\n", cwd);
-    setPathInfo(cwd);
+    FileManager::setPathInfo(cwd);
 }
 
 FileManager::~FileManager()
 {
+
 }
 
 FILE *FileManager::openFile(const char *t_subfolder, const char *t_name, const char *t_extension)
