@@ -35,7 +35,7 @@
 extern u8 usbd_irx[];
 extern int size_usbd_irx;
 
-extern u8  usbhdfsd_irx[];
+extern u8  usbhdfsd_irx;
 extern int size_usbhdfsd_irx;
 
 

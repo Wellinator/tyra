@@ -61,9 +61,9 @@ void Mesh::loadObj(const char *t_subfolder, const char *t_objFile, const float &
     frames = new MeshFrame[framesCount];
     _areFramesAllocated = true;
     //Provisory cleanup
-    char *finalPath = String::createConcatenated(t_subfolder, t_objFile, ".obj");      // "folder/object.obj"
-    loader.load(&frames[0], finalPath, t_scale, t_invertT);
-    delete[] finalPath;
+    char *Path = String::createConcatenated(t_subfolder, t_objFile, ".obj");      // "folder/object.obj"
+    loader.load(&frames[0], Path, t_scale, t_invertT);
+    delete[] Path;
     _isMother = true;
 }
 
@@ -83,11 +83,11 @@ void Mesh::loadObj(const char *t_subfolder, const char *t_objFile, const float &
         {
             char *part2 = String::createU32ToString(i + 1);              // 0 -> "1"
             char *part3 = String::createWithLeadingZeros(part2);         // "000001"
-            char *finalPath = String::createConcatenated(part1, part2, part3, ".obj"); // "folder/object_000001.obj"
-            loader.load(&frames[i], finalPath, t_scale, t_invertT);
+            char *ObjPath = String::createConcatenated(part1, part2, part3, ".obj"); // "folder/object_000001.obj"
+            loader.load(&frames[i], ObjPath, t_scale, t_invertT);
             delete[] part2;
             delete[] part3;
-            delete[] finalPath;
+            delete[] ObjPath;
         }
         delete[] part1;
         _isMother = true;
