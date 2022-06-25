@@ -6,7 +6,7 @@
 # Copyright 2020 - 2022, tyra - https://github.com/h4570/tyra
 # Licenced under Apache License 2.0
 # Sandro Sobczyński <sandro.sobczynski@gmail.com>
-# Wellington Carvalho <wellcoj@gmail.com>
+# Wellington Carvalho <wellcoj@gmail.com> and André Guilherme <andregui17@outlook.com>
 */
 
 #include "../include/loaders/obj_loader.hpp"
@@ -27,9 +27,9 @@ ObjLoader::~ObjLoader() {}
 // Methods
 // ----
 
-void ObjLoader::load(MeshFrame *o_result, const char *t_path, const float &t_scale, const u8 &t_invertT)
-{
-    FILE *file = fileManager.openFile(t_path);
+void ObjLoader::load(MeshFrame *o_result, FILE *file, const char *t_path, const float &t_scale, const u8 &t_invertT)
+{ 
+    file = fileManager.openFile(t_path);
     assertMsg(file != NULL, "Failed to load .obj file!");
     allocateObjMemory(file, o_result);
     fseek(file, 0, SEEK_SET);

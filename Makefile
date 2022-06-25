@@ -18,12 +18,6 @@ IOP_MODULES = 	src/engine/embed/libsd.o \
 				src/engine/embed/usbhdfsd.o \
 				src/engine/embed/audsrv.o
 
-ASM_MODULES = src/engine/embed/libsd.s \
-			  src/engine/embed/usbd.s \
-			  src/engine/embed/usbhdfsd.s \
-			  src/engine/embed/audsrv.s 
-
-
 ENGINE_OBJS = 									\
 				src/engine/engine.o \
 				src/engine/modules/audio.o \
@@ -70,7 +64,7 @@ $(OBJS_DIR):
 
 EE_LIBS := $(EE_LIBS) -lpatches -lfileXio -ldraw -lcdvd -lgraph -lmath3d -lpacket -ldma -lpacket2 -lpad -laudsrv -lc -lstdc++ -lpng -lz
 
-EE_INCS := -I$(PS2SDK)/ports/include -I$(PS2SDK)/ee/include -I$(PS2SDK)/common/include -I$(TYRA)/src/engine/include -I/src/engine/include $(EE_INCS)
+EE_INCS := -I$(PS2SDK)/ports/include -I$(PS2SDK)/ee/include -I$(PS2SDK)/common/include -I$(TYRA)/src/engine/include $(EE_INCS)
 
 EE_LDFLAGS := -L$(PS2SDK)/ports/lib -L$(TYRA)/src/engine $(EE_LDFLAGS)
 
@@ -106,7 +100,7 @@ rocket:
 	$(MAKE) -C src/samples/rocket_league all clean
 
 # Rebuild the engine
-rebuild-engine: 
+rebuild: 
 	$(MAKE) -C src/engine && make && make EE_CXXFLAGS= -DNDEBUG $(EE_CXXFLAGS)
 
 # Rebuild debug engine

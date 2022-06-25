@@ -6,7 +6,7 @@
 # Copyright 2020 - 2022, tyra - https://github.com/h4570/tyra
 # Licenced under Apache License 2.0
 # Sandro Sobczyński <sandro.sobczynski@gmail.com>
-# Wellington Carvalho <wellcoj@gmail.com>
+# Wellington Carvalho <wellcoj@gmail.com> and André Guilherme <andregui17@outlook.com>
 */
 
 #ifndef _TYRA_OBJ_LOADER_
@@ -28,7 +28,7 @@ public:
      * Notice: At this moment textures names are MATERIAL names from .obj file!
      * Notice 2: Faces MUST be triangulated (check out blender export settings).
      */
-    void load(MeshFrame *o_result, const char *t_fileName, const float &t_scale, const u8 &t_invertT);
+    void load(MeshFrame *o_result, FILE *file, const char *t_fileName, const float &t_scale, const u8 &t_invertT);
 
 private:
     void allocateObjMemory(FILE *t_file, MeshFrame *t_result);

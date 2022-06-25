@@ -6,7 +6,7 @@
 # Copyright 2020 - 2022, tyra - https://github.com/h4570/tyra
 # Licenced under Apache License 2.0
 # Sandro Sobczyński <sandro.sobczynski@gmail.com>
-# Wellington Carvalho <wellcoj@gmail.com>
+# Wellington Carvalho <wellcoj@gmail.com> and André Guilherme <andregui17@outlook.com>
 */
 
 /*		
@@ -35,10 +35,10 @@ DffLoader::~DffLoader() {}
 // Methods
 // ----
 
-void DffLoader::load(MeshFrame *o_result, const char *t_path, const float &t_scale, const u8 &t_invertT)
+void DffLoader::load(MeshFrame *o_result, FILE *file, const char *t_path, const float &t_scale, const u8 &t_invertT)
 {
     consoleLog("Loading dff file");
-    FILE *file = fileManager.openFile(t_path);
+    file = fileManager.openFile(t_path);
     assertMsg(file != NULL, "Failed to load .dff file!");
     fseek(file, 0L, SEEK_END);
     long fileSize = ftell(file);

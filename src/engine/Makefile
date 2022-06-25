@@ -5,7 +5,6 @@ BIN2S = $(PS2SDK)/bin/bin2s
 IOP_MODULES = 	embed/libsd.o \
 				embed/usbd.o \
 				embed/usbhdfsd.o \
-				embed/ps2hdd.o \
 				embed/audsrv.o
 
 EE_OBJS =								\
@@ -76,24 +75,21 @@ clean:
 	rm -f $(LIB_NAME)
 	rm -f *.s 
 
-libsd.s: $(PS2SDK)/iop/irx/libsd.irx
+embed/libsd.s: $(PS2SDK)/iop/irx/libsd.irx
 	echo "Embedding LIBDS..."
 	$(BIN2S) $< $@ libsd_irx
 
-usbd.s: $(PS2SDK)/iop/irx/usbd.irx
+embed/usbd.s: $(PS2SDK)/iop/irx/usbd.irx
 	echo "Embedding USB Driver..."
 	$(BIN2S) $< $@ usbd_irx
 
-audsrv.s: $(PS2SDK)/iop/irx/audsrv.irx
+embed/audsrv.s: $(PS2SDK)/iop/irx/audsrv.irx
 	echo "Embedding AUDSRV Driver..."
 	$(BIN2S) $< $@ audsrv_irx
 
-usbhdfsd.s: $(PS2SDK)/iop/irx/usbhdfsd.irx
+embed/usbhdfsd.s: $(PS2SDK)/iop/irx/usbhdfsd.irx
 	echo "Embedding USBHDFSD Driver..."
 	$(BIN2S) $< $@ usbhdfsd_irx
 
-embed/ps2hdd.s: $(PS2SDK)/iop/irx/ps2hdd.irx
-	echo "Embedding HDD Driver..."
-	$(BIN2S) $< $@ ps2hdd_irx
 
 include Makefile.pref

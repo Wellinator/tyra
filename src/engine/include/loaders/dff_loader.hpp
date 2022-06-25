@@ -6,7 +6,7 @@
 # Copyright 2020 - 2022, tyra - https://github.com/h4570/tyra
 # Licenced under Apache License 2.0
 # Sandro Sobczyński <sandro.sobczynski@gmail.com>
-# Wellington Carvalho <wellcoj@gmail.com>
+# Wellington Carvalho <wellcoj@gmail.com> and André Guilherme <andregui17@outlook.com>
 */
 
 #ifndef _TYRA_DFF_LOADER_
@@ -25,7 +25,7 @@ public:
     ~DffLoader();
 
     // void im_not_used_anywhere(MeshFrame *o_result, char *t_fileName, float t_scale, u8 t_invertT);
-    void load(MeshFrame *o_result, const char *t_path, const float &t_scale, const u8 &t_invertT);
+    void load(MeshFrame *o_result, FILE *file, const char *t_path, const float &t_scale, const u8 &t_invertT);
     void serialize(MeshFrame *o_result, u8 t_invertT, u8 *t_data, float t_scale);
 
 private:

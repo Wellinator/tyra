@@ -22,6 +22,30 @@ FileManager::~FileManager()
 
 }
 
+FILE *FileManager::openFile(const char *t_path)
+{
+    char *path = String::createConcatenated(this->getBasePath(), t_path);
+
+    printf("Opening file: %s\n", path);
+    FILE *file = fopen(path, "rb");
+
+    if(file == NULL)
+    {
+        char *errorMsg = String::createConcatenated("Failed to load the file: ", path);
+        assertMsg(file != NULL, errorMsg);
+    }
+
+    return file;
+}
+
+FILE *FileManager::openFile(const char *t_dir, const char *t_file)
+{
+    char *path = String::createConcatenated(t_dir, t_file);
+
+    printf("Opening file: %s %s\n", t_dir, t_file);
+    return openFile(path);
+}
+
 FILE *FileManager::openFile(const char *t_subfolder, const char *t_name, const char *t_extension)
 {
     char *path_part1 = String::createConcatenated(t_subfolder, t_name);
@@ -31,26 +55,44 @@ FILE *FileManager::openFile(const char *t_subfolder, const char *t_name, const c
     return openFile(path);
 }
 
-FILE *FileManager::openFile(const char *t_dir, const char *t_file)
+//Wolf3s Modified openFile
+FILE *FileManager::openFile(FILE *file, const char* t_path)
 {
-    char *path = String::createConcatenated(t_dir, t_file);
-    return openFile(path);
+  char *path = String::createConcatenated(this->getBasePath(), t_path);
+
+  printf("Opening some file %s\n", path);
+  file = fopen(path, "rb");
+
+  if(file)
+  {
+    char *SuccessMessage = String::createConcatenated("The file has loaded successfully in %s", path);
+    assertMsg(file, SuccessMessage);
+  }
+ 
+  else
+  {
+    char *errorMsg = String::createConcatenated("Failed to load the file: ", path);
+    assertMsg(file != NULL, errorMsg);
+  }
+
+  return file;
 }
 
-FILE *FileManager::openFile(const char *t_path)
+FILE *FileManager::openFile(FILE *file, const char *t_dir, const char *t_file)
 {
-    char *path = String::createConcatenated(this->getBasePath(), t_path);
+    char *path = String::createConcatenated(t_dir, t_file);
 
-    printf("Opening file: %s\n", path);
-    FILE *file = fopen(path, "rb");
+    printf("Opening file: %s %s\n", t_dir, t_file);
+    return FileManager::openFile(file, path);
+}
 
-    if (file == NULL)
-    {
-        char *errorMsg = String::createConcatenated("Failed to load the file: ", path);
-        assertMsg(file != NULL, errorMsg);
-    }
-
-    return file;
+FILE *FileManager::openFile(FILE *file, const char *t_subfolder, const char *t_name, const char *t_extension)
+{
+    char *path_part1 = String::createConcatenated(t_subfolder, t_name);
+    char *path = String::createConcatenated(path_part1, t_extension);
+    delete[] path_part1;
+    
+    return FileManager::openFile(file, path);
 }
 
 void FileManager::setPathInfo(char *path)

@@ -3,9 +3,10 @@
 #   |     \/   ____| |___|    
 #   |     |   |   \  |   |       
 #-----------------------------------------------------------------------
-# Copyright 2020, tyra - https://github.com/h4570/tyra
+# Copyright 2020 - 2022, tyra - https://github.com/h4570/tyra
 # Licenced under Apache License 2.0
 # Sandro Sobczyński <sandro.sobczynski@gmail.com>
+# André Guilherme <andregui17@outlook.com>
 */
 
 #include "../include/modules/camera_base.hpp"
@@ -18,8 +19,7 @@
 // Constructors/Destructors
 // ----
 
-CameraBase::CameraBase(ScreenSettings *t_screen, Vector3 *t_position)
-    : screen(t_screen)
+CameraBase::CameraBase(ScreenSettings *t_screen, Vector3 *t_position) : screen(t_screen)
 {
     consoleLog("Initializing frustum");
     farPlaneDist = screen->farPlaneDist;

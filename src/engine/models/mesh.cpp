@@ -3,9 +3,10 @@
 #   |     \/   ____| |___|
 #   |     |   |   \  |   |
 #-----------------------------------------------------------------------
-# Copyright 2020, tyra - https://github.com/h4570/tyra
+# Copyright 2020 - 2022, tyra - https://github.com/h4570/tyra
 # Licenced under Apache License 2.0
 # Sandro Sobczyński <sandro.sobczynski@gmail.com>
+# André Guilherme <andregui17@outlook.com>
 */
 
 #include "../include/models/mesh.hpp"
@@ -60,10 +61,8 @@ void Mesh::loadObj(const char *t_subfolder, const char *t_objFile, const float &
     framesCount = 1;
     frames = new MeshFrame[framesCount];
     _areFramesAllocated = true;
-    //Provisory cleanup
-    char *Path = String::createConcatenated(t_subfolder, t_objFile, ".obj");      // "folder/object.obj"
-    loader.load(&frames[0], Path, t_scale, t_invertT);
-    delete[] Path;
+    FILE *file = fileManager.openFile(t_subfolder, t_objFile, ".obj");
+    loader.load(&frames[0], file, NULL, t_scale, t_invertT);
     _isMother = true;
 }
 
@@ -84,7 +83,8 @@ void Mesh::loadObj(const char *t_subfolder, const char *t_objFile, const float &
             char *part2 = String::createU32ToString(i + 1);              // 0 -> "1"
             char *part3 = String::createWithLeadingZeros(part2);         // "000001"
             char *ObjPath = String::createConcatenated(part1, part2, part3, ".obj"); // "folder/object_000001.obj"
-            loader.load(&frames[i], ObjPath, t_scale, t_invertT);
+            FILE *file = fileManager.openFile(ObjPath);
+            loader.load(&frames[i], file, NULL, t_scale, t_invertT);
             delete[] part2;
             delete[] part3;
             delete[] ObjPath;
@@ -97,14 +97,11 @@ void Mesh::loadObj(const char *t_subfolder, const char *t_objFile, const float &
 void Mesh::loadDff(const char *t_subfolder, const char *t_dffFile, const float &t_scale, const u8 &t_invertT)
 {
     DffLoader loader = DffLoader();
-    char *part1 = String::createConcatenated(t_subfolder, t_dffFile);
-    char *dffPath = String::createConcatenated(part1, ".dff");
+    FILE *file = fileManager.openFile(t_subfolder, t_dffFile, ".dff");
     framesCount = 1;
     frames = new MeshFrame[1];
     _areFramesAllocated = true;
-    loader.load(frames, dffPath, t_scale, t_invertT);
-    delete[] part1;
-    delete[] dffPath;
+    loader.load(frames, file, NULL, t_scale, t_invertT);
     _isMother = true;
 }
 

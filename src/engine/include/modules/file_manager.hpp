@@ -31,9 +31,16 @@ public:
      * Read file from source. If NDEBUG read from 'mass:' or also it  will read from 'host:'
      * @returns FILE *
      */
-    FILE *openFile(const char *t_subfolder, const char *t_name, const char *t_extension);
-    FILE *openFile(const char *t_dir, const char *t_file);
     FILE *openFile(const char *t_path);
+    FILE *openFile(const char *t_dir, const char *t_file);
+    FILE *openFile(const char *t_subfolder, const char *t_name, const char *t_extension);
+
+
+    //Regards from wolf3s :)
+    FILE *openFile(FILE *file, const char *t_path);
+    FILE *openFile(FILE *file, const char *t_dir, const char *t_file);
+    FILE *openFile(FILE *file, const char *t_subfolder, const char *t_name, const char *t_extension);
+    
     char *getBasePath();
 
 private:
