@@ -30,13 +30,13 @@ FILE *FileManager::openFile(const char *t_path)
     FILE *file; //= fopen(path, "rb");
     //TODO: Bug on fopen maybe switch to 
 //open() ?
-
+/*
     if(file == NULL)
     {
         char *errorMsg = String::createConcatenated("Failed to load the file: ", path);
         assertMsg(file != NULL, errorMsg);
     }
-
+*/
     return file;
 }
 
@@ -64,7 +64,7 @@ FILE *FileManager::openFile(FILE *file, const char* t_path)
 
   printf("Opening some file %s\n", path);
   //file = fopen(path, "rb");
-
+/*
   if(file)
   {
     char *SuccessMessage = String::createConcatenated("The file has loaded successfully in %s", path);
@@ -76,7 +76,7 @@ FILE *FileManager::openFile(FILE *file, const char* t_path)
     char *errorMsg = String::createConcatenated("Failed to load the file: ", path);
     assertMsg(file != NULL, errorMsg);
   }
-
+*/
   return file;
 }
 
