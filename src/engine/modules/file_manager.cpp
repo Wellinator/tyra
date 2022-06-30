@@ -27,7 +27,9 @@ FILE *FileManager::openFile(const char *t_path)
     char *path = String::createConcatenated(this->getBasePath(), t_path);
 
     printf("Opening file: %s\n", path);
-    FILE *file = fopen(path, "rb");
+    FILE *file; //= fopen(path, "rb");
+    //TODO: Bug on fopen maybe switch to 
+//open() ?
 
     if(file == NULL)
     {
