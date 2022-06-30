@@ -63,7 +63,7 @@ FILE *FileManager::openFile(FILE *file, const char* t_path)
   char *path = String::createConcatenated(this->getBasePath(), t_path);
 
   printf("Opening some file %s\n", path);
-  file = fopen(path, "rb");
+  //file = fopen(path, "rb");
 
   if(file)
   {
