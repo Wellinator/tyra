@@ -29,6 +29,7 @@ class RenderBBox : public CoreBBox {
 
   CoreBBoxFrustum clipFrustumCheck(const Plane* frustumPlanes,
                                    const M4x4& model) const;
+  CoreBBoxFrustum clipPreciseFrustumCheck(const Plane* frustumPlanes) const;
 
   /** Get new transformed BBox by model matrix */
   RenderBBox getTransformed(const M4x4& t_matrix) const;

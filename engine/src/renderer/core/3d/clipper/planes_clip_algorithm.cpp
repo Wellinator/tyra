@@ -18,12 +18,17 @@ PlanesClipAlgorithm::PlanesClipAlgorithm() {
 
 PlanesClipAlgorithm::~PlanesClipAlgorithm() { delete[] tempVertices; }
 
-float PlanesClipAlgorithm::clipMargin = -10.0F;
+void PlanesClipAlgorithm::setClipMargin(const float margin) {
+  clipMargin = margin;
+  near = baseNear - (-clipMargin);
+};
 
 void PlanesClipAlgorithm::init(const RendererSettings& settings) {
+  baseNear = settings.getNear();
+
   halfWidth = 0.5F;
   halfHeight = 0.5F;
-  near = settings.getNear() - (-clipMargin);
+  near = baseNear - (-clipMargin);
   far = -settings.getFar();
 }
 

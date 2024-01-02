@@ -15,7 +15,9 @@ namespace Tyra {
 enum PipelineInfoBagFrustumCulling {
   /** No frustum culling  */
   PipelineInfoBagFrustumCulling_None = 0,
-  /** Frustum culling of parts of an object */
+  /** Frustum culling of parts of an object imprecise */
+  PipelineInfoBagFrustumCulling_Simple = 1,
+  /** Frustum culling of parts of an object more accurate */
   PipelineInfoBagFrustumCulling_Precise = 2,
 };
 

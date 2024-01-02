@@ -78,7 +78,7 @@ void StaPipCore::render(StaPipBag* bag) {
   if (bag->count <= 0) return;
 
   bool frustumCull =
-      bag->info->frustumCulling == PipelineInfoBagFrustumCulling_Precise;
+      bag->info->frustumCulling != PipelineInfoBagFrustumCulling_None;
 
   TYRA_ASSERT(bag->vertices != nullptr,
               "Vertices are required in 3D render bag!");
@@ -110,7 +110,7 @@ void StaPipCore::render(StaPipBag* bag) {
   u32 maxVertCount = getMaxVertCountByBag(bag);
 
   StaPipBagPackagesBBox* bbox = nullptr;
-  if (bag->info->frustumCulling == PipelineInfoBagFrustumCulling_Precise) {
+  if (frustumCull) {
     bbox = cacher.getBBoxes(bag->vertices, bag->count,
                             reinterpret_cast<u32>(bag->vertices), maxVertCount);
   }
@@ -120,8 +120,13 @@ void StaPipCore::render(StaPipBag* bag) {
   CoreBBoxFrustum frustumCheck = OUTSIDE_FRUSTUM;
 
   if (frustumCull) {
-    frustumCheck = bbox->getMainBBox()->clipFrustumCheck(
-        rendererCore->renderer3D.frustumPlanes.getAll(), *bag->info->model);
+    frustumCheck =
+        bag->info->frustumCulling == PipelineInfoBagFrustumCulling_Simple
+            ? bbox->getMainBBox()->clipFrustumCheck(
+                  rendererCore->renderer3D.frustumPlanes.getAll(),
+                  *bag->info->model)
+            : bbox->getMainBBox()->clipPreciseFrustumCheck(
+                  rendererCore->renderer3D.frustumPlanes.getAll());
 
     if (frustumCheck == OUTSIDE_FRUSTUM) {
       return;
@@ -166,10 +171,11 @@ void StaPipCore::render(StaPipBag* bag) {
       frustumCull && frustumCheck == PARTIALLY_IN_FRUSTUM &&
       !bag->info->fullClipChecks;
 
-  auto checkNoClipNo =  // cull all
+  auto checkNoClipNoCull =  // no cull no clip
       !frustumCull && !bag->info->fullClipChecks;
 
-  if (checkYesFrustumInClipYes || checkYesFrustumInClipNo || checkNoClipNo) {
+  if (checkYesFrustumInClipYes || checkYesFrustumInClipNo ||
+      checkNoClipNoCull) {
     u16 packagesCount = 0;
     auto* biggerPkgs = packager.create(&packagesCount, bag, maxVertCount);
     Verbose("Material - in frustum. Pkgs: ", packagesCount,
@@ -237,16 +243,16 @@ void StaPipCore::renderSubpkgs(StaPipBagPackage* subpkgs, u16 count) {
     if (subpkgs[i].isInFrustum == IN_FRUSTUM) {
       if (loadedIndexes.size() <= 1) {
         Verbose(i, " - subpackage in frustum -> load");
-        loadedIndexes.push_back(i);
+        loadedIndexes.emplace_back(i);
       } else {  // Hmm, this will never happen?
         Verbose(i, " - subpackage in frustum, cull all 3 subpkgs");
         auto buffer = qbufferRenderer.getBuffer();
         buffer->fillByCopyMax(subpkgs[loadedIndexes[0]],
                               subpkgs[loadedIndexes[1]], subpkgs[i]);
         qbufferRenderer.cull(buffer);
-        doneIndexes.push_back(loadedIndexes[0]);
-        doneIndexes.push_back(loadedIndexes[1]);
-        doneIndexes.push_back(i);
+        doneIndexes.emplace_back(loadedIndexes[0]);
+        doneIndexes.emplace_back(loadedIndexes[1]);
+        doneIndexes.emplace_back(i);
         loadedIndexes.clear();
       }
     }
@@ -258,14 +264,14 @@ void StaPipCore::renderSubpkgs(StaPipBagPackage* subpkgs, u16 count) {
     buffer->fillByCopy1By2(subpkgs[loadedIndexes[0]],
                            subpkgs[loadedIndexes[1]]);
     qbufferRenderer.cull(buffer);
-    doneIndexes.push_back(loadedIndexes[0]);
-    doneIndexes.push_back(loadedIndexes[1]);
+    doneIndexes.emplace_back(loadedIndexes[0]);
+    doneIndexes.emplace_back(loadedIndexes[1]);
   } else if (loadedIndexes.size() == 1) {
     Verbose("1 in frustum subpkg left -> cull it");
     auto buffer = qbufferRenderer.getBuffer();
     buffer->fillByPointer(subpkgs[loadedIndexes[0]]);
     qbufferRenderer.cull(buffer);
-    doneIndexes.push_back(loadedIndexes[0]);
+    doneIndexes.emplace_back(loadedIndexes[0]);
   }
 
   for (u16 i = 0; i < count; i++) {

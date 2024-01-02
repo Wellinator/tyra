@@ -73,6 +73,7 @@ class CoreBBox {
                                const float* margins = nullptr) const;
   CoreBBoxFrustum frustumCheck(const Plane* frustumPlanes,
                                const float* margins = nullptr) const;
+  CoreBBoxFrustum preciseFrustumCheck(const Plane* frustumPlanes) const;
 
   /**
    * @brief Check if bbox is in view frustum

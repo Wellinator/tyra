@@ -32,6 +32,14 @@ class StaPipOptions : public PipelineOptions {
    * be way faster than enabling this option...
    */
   bool fullClipChecks;
+
+   /**
+   * @brief Experimental! Value used by clipping algorithm.
+   * Default: -10.0
+   * When objects are very clese to the camera eyes you can you this margin to
+   * control the clipping efficiency
+   */
+  float clipMargin = -10.0F;
 };
 
 }  // namespace Tyra

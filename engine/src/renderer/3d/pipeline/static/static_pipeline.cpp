@@ -129,6 +129,7 @@ StaPipInfoBag* StaticPipeline::getInfoBag(const StaticMesh* mesh,
           ? PipelineInfoBagFrustumCulling_Precise
           : PipelineInfoBagFrustumCulling_None;
   result->fullClipChecks = options->fullClipChecks;
+  result->clipMargin = options->clipMargin;
   result->zTestType = options->zTestType;
   result->model = model;
 

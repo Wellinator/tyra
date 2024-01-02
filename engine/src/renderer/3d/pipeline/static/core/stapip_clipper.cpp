@@ -31,6 +31,8 @@ void StaPipClipper::clip(StaPipQBuffer* buffer) {
                                           buffer->bag->texture != nullptr,
                                           buffer->bag->color->many != nullptr};
 
+  algorithm.setClipMargin(buffer->bag->info->clipMargin);
+
   std::vector<PlanesClipVertex> clippedVertices;
 
   for (u32 i = 0; i < buffer->size / 3; i++) {
@@ -47,15 +49,18 @@ void StaPipClipper::clip(StaPipQBuffer* buffer) {
     u8 clippedSize =
         algorithm.clip(clippedTriangle, inputTriangle, algoSettings);
 
-    if (clippedSize == 0) continue;
+    if (clippedSize == 0)
+      continue;
+    else
+      clippedVertices.reserve(clippedSize);
 
     auto va = clippedTriangle[0];
     for (u8 j = 1; j <= clippedSize - 2; j++) {
       auto vb = clippedTriangle[j];
       auto vc = clippedTriangle[(j + 1) % clippedSize];
-      clippedVertices.push_back(va);
-      clippedVertices.push_back(vb);
-      clippedVertices.push_back(vc);
+      clippedVertices.emplace_back(va);
+      clippedVertices.emplace_back(vb);
+      clippedVertices.emplace_back(vc);
     }
   }
 

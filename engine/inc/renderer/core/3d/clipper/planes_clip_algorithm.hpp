@@ -31,10 +31,11 @@ class PlanesClipAlgorithm {
   u8 clip(PlanesClipVertex* o_vertices, PlanesClipVertexPtrs* i_vertices,
           const EEClipAlgorithmSettings& settings);
 
-  static float clipMargin;
+  void setClipMargin(const float margin);
+  float clipMargin;
 
  private:
-  float halfWidth, halfHeight, near, far;
+  float halfWidth, halfHeight, baseNear, near, far;
   PlanesClipVertex* tempVertices;
 
   float getValueByPlane(const PlanesClipVertex& v, const int& plane);

@@ -257,6 +257,44 @@ CoreBBoxFrustum CoreBBox::frustumCheck(const Plane* frustumPlanes,
   return result;
 }
 
+CoreBBoxFrustum CoreBBox::preciseFrustumCheck(const Plane* frustumPlanes) const {
+  CoreBBoxFrustum result = IN_FRUSTUM;
+  Vec4 vmin, vmax;
+
+  for (u8 i = 0; i < 6; i++) {
+    // X axis
+    if (frustumPlanes[i].normal.x <= 0) {
+      vmin.x = vertices[0].x;
+      vmax.x = vertices[7].x;
+    } else {
+      vmin.x = vertices[7].x;
+      vmax.x = vertices[0].x;
+    }
+    // Y axis
+    if (frustumPlanes[i].normal.y <= 0) {
+      vmin.y = vertices[0].y;
+      vmax.y = vertices[7].y;
+    } else {
+      vmin.y = vertices[7].y;
+      vmax.y = vertices[0].y;
+    }
+    // Z axis
+    if (frustumPlanes[i].normal.z <= 0) {
+      vmin.z = vertices[0].z;
+      vmax.z = vertices[7].z;
+    } else {
+      vmin.z = vertices[7].z;
+      vmax.z = vertices[0].z;
+    }
+
+    if (frustumPlanes[i].normal.innerProduct(vmin) + frustumPlanes[i].distance <= 0)
+      return OUTSIDE_FRUSTUM;
+    if (frustumPlanes[i].normal.innerProduct(vmax) + frustumPlanes[i].distance < 0)
+      result = PARTIALLY_IN_FRUSTUM;
+  }
+  return result;
+}
+
 CoreBBoxFrustum CoreBBox::frustumCheck(const Plane* frustumPlanes,
                                        const float* margins) const {
   CoreBBoxFrustum result = IN_FRUSTUM;

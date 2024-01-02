@@ -106,14 +106,21 @@ CoreBBoxFrustum StaPipBagPackager::checkFrustum(const StaPipBagPackage& pkg) {
 
   if (pkg.size <= (maxVertCount / 3)) {  // Is subpackage
     auto& bbox = renderBBox->getChildBBox1By3(pkg.indexOf1By3BBox);
-    return bbox.clipFrustumCheck(frustumPlanes->getAll(),
-                                 *pkg.bag->info->model);
+    return pkg.bag->info->frustumCulling ==
+                   PipelineInfoBagFrustumCulling_Precise
+               ? bbox.clipPreciseFrustumCheck(frustumPlanes->getAll())
+               : bbox.clipFrustumCheck(frustumPlanes->getAll(),
+                                       *pkg.bag->info->model);
+
   } else {  // Is package
     const auto& indexOfPart = pkg.indexOf1By3BBox;
     auto partSize = ceil(pkg.size / static_cast<float>(maxVertCount / 3));
     auto bbox = renderBBox->createChildBBox(indexOfPart, partSize);
-    return bbox.clipFrustumCheck(frustumPlanes->getAll(),
-                                 *pkg.bag->info->model);
+    return pkg.bag->info->frustumCulling ==
+                   PipelineInfoBagFrustumCulling_Precise
+               ? bbox.clipPreciseFrustumCheck(frustumPlanes->getAll())
+               : bbox.clipFrustumCheck(frustumPlanes->getAll(),
+                                       *pkg.bag->info->model);
   }
 }
 

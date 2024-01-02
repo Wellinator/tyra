@@ -67,4 +67,9 @@ CoreBBoxFrustum RenderBBox::clipFrustumCheck(const Plane* frustumPlanes,
   return frustumCheck(frustumPlanes, model, guardBand);  // Let's check it again
 }
 
+CoreBBoxFrustum RenderBBox::clipPreciseFrustumCheck(
+    const Plane* frustumPlanes) const {
+  return preciseFrustumCheck(frustumPlanes);
+}
+
 }  // namespace Tyra
