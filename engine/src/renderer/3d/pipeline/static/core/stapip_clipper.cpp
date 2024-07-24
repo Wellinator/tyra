@@ -49,18 +49,15 @@ void StaPipClipper::clip(StaPipQBuffer* buffer) {
     u8 clippedSize =
         algorithm.clip(clippedTriangle, inputTriangle, algoSettings);
 
-    if (clippedSize == 0)
-      continue;
-    else
-      clippedVertices.reserve(clippedSize);
+    if (clippedSize == 0) continue;
 
     auto va = clippedTriangle[0];
     for (u8 j = 1; j <= clippedSize - 2; j++) {
       auto vb = clippedTriangle[j];
       auto vc = clippedTriangle[(j + 1) % clippedSize];
-      clippedVertices.emplace_back(va);
-      clippedVertices.emplace_back(vb);
-      clippedVertices.emplace_back(vc);
+      clippedVertices.push_back(va);
+      clippedVertices.push_back(vb);
+      clippedVertices.push_back(vc);
     }
   }
 

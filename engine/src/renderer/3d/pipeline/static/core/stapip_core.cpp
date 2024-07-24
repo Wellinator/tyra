@@ -243,16 +243,16 @@ void StaPipCore::renderSubpkgs(StaPipBagPackage* subpkgs, u16 count) {
     if (subpkgs[i].isInFrustum == IN_FRUSTUM) {
       if (loadedIndexes.size() <= 1) {
         Verbose(i, " - subpackage in frustum -> load");
-        loadedIndexes.emplace_back(i);
+        loadedIndexes.push_back(i);
       } else {  // Hmm, this will never happen?
         Verbose(i, " - subpackage in frustum, cull all 3 subpkgs");
         auto buffer = qbufferRenderer.getBuffer();
         buffer->fillByCopyMax(subpkgs[loadedIndexes[0]],
                               subpkgs[loadedIndexes[1]], subpkgs[i]);
         qbufferRenderer.cull(buffer);
-        doneIndexes.emplace_back(loadedIndexes[0]);
-        doneIndexes.emplace_back(loadedIndexes[1]);
-        doneIndexes.emplace_back(i);
+        doneIndexes.push_back(loadedIndexes[0]);
+        doneIndexes.push_back(loadedIndexes[1]);
+        doneIndexes.push_back(i);
         loadedIndexes.clear();
       }
     }
@@ -264,14 +264,14 @@ void StaPipCore::renderSubpkgs(StaPipBagPackage* subpkgs, u16 count) {
     buffer->fillByCopy1By2(subpkgs[loadedIndexes[0]],
                            subpkgs[loadedIndexes[1]]);
     qbufferRenderer.cull(buffer);
-    doneIndexes.emplace_back(loadedIndexes[0]);
-    doneIndexes.emplace_back(loadedIndexes[1]);
+    doneIndexes.push_back(loadedIndexes[0]);
+    doneIndexes.push_back(loadedIndexes[1]);
   } else if (loadedIndexes.size() == 1) {
     Verbose("1 in frustum subpkg left -> cull it");
     auto buffer = qbufferRenderer.getBuffer();
     buffer->fillByPointer(subpkgs[loadedIndexes[0]]);
     qbufferRenderer.cull(buffer);
-    doneIndexes.emplace_back(loadedIndexes[0]);
+    doneIndexes.push_back(loadedIndexes[0]);
   }
 
   for (u16 i = 0; i < count; i++) {
