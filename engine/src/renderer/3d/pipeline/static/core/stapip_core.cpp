@@ -177,6 +177,7 @@ void StaPipCore::render(StaPipBag* bag) {
   if (checkYesFrustumInClipYes || checkYesFrustumInClipNo ||
       checkNoClipNoCull) {
     u16 packagesCount = 0;
+    TYRA_LOG("1 (", packagesCount, ", ", maxVertCount, ")");
     auto* biggerPkgs = packager.create(&packagesCount, bag, maxVertCount);
     Verbose("Material - in frustum. Pkgs: ", packagesCount,
             " size: ", static_cast<int>(biggerPkgs[0].size));
@@ -191,11 +192,13 @@ void StaPipCore::render(StaPipBag* bag) {
     u16 packagesCount = 0;
     auto doClip = checkYesFrustumPartialClipYes;
     if (!doClip || bag->count >= maxVertCount * 2) {
+      TYRA_LOG("2 (", packagesCount, ", ", maxVertCount, ")");
       auto packages = packager.create(&packagesCount, bag, maxVertCount);
       Verbose("Material - partial. Packages: ", packagesCount);
       renderPkgs(packages, doClip, packagesCount);
       delete[] packages;
     } else {
+      TYRA_LOG("3 (", packagesCount, ", ", maxVertCount / 3, ")");
       auto subpkgs = packager.create(&packagesCount, bag, maxVertCount / 3);
       Verbose("Material - partial. Subpackages: ", packagesCount);
       renderSubpkgs(subpkgs, packagesCount);
@@ -223,6 +226,7 @@ void StaPipCore::renderPkgs(StaPipBagPackage* packages, const bool& doClip,
       qbufferRenderer.cull(buffer);
     } else if (doSubpkgs) {
       u16 subpkgsSize = 0;
+      TYRA_LOG("4 (", subpkgsSize, ", ", maxVertCount / 3, ")");
       auto packages1By3 =
           packager.create(&subpkgsSize, packages[i], maxVertCount / 3);
       Verbose(i, " - partial package. Created subpkgs: ", subpkgsSize);
