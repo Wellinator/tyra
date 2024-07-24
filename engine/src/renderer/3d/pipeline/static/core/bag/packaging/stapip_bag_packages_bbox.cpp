@@ -60,8 +60,8 @@ StaPipBagPackagesBBox::~StaPipBagPackagesBBox() {
 
 const RenderBBox& StaPipBagPackagesBBox::getChildBBox1By3(
     const u32& index) const {
-  TYRA_ASSERT(index < partsCount,
-              "Index out of range. Provided index: ", index);
+  TYRA_ASSERT(index < partsCount, "Index out of range. Provided index: ", index,
+              ". Max index: ", partsCount);
   return static_cast<RenderBBox&>(bboxParts->at(index));
 }
 
