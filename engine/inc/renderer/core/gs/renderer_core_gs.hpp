@@ -30,6 +30,8 @@ class RendererCoreGS {
 
   void enableZTests();
 
+  const u8 getDrawContext() { return context; };
+
  private:
   constexpr static float gsCenter = 4096.0F;
   constexpr static float screenCenter = gsCenter / 2.0F;
