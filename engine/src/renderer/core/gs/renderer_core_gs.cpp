@@ -163,7 +163,7 @@ void RendererCoreGS::updateCurrentField() {
   currentField = GRAPH_FIELD_EVEN;
 }
 
-const framebuffer_t& getFrameBuffer(const u8& targetContext) {
+const framebuffer_t& RendererCoreGS::getFrameBuffer(const u8& targetContext) {
   TYRA_ASSERT(targetContext == 0 || targetContext == 1,
               "Invalid frame buffer context!");
   return frameBuffers[targetContext];
