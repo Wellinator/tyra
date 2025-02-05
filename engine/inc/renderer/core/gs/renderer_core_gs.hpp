@@ -31,6 +31,8 @@ class RendererCoreGS {
   void enableZTests();
 
   const u8 getDrawContext() { return context; };
+  const framebuffer_t& getCurrentFrameData() { return frameBuffers[context]; };
+  const framebuffer_t& getFrameBuffer(const u8& targetContext);
 
  private:
   constexpr static float gsCenter = 4096.0F;
