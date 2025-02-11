@@ -28,7 +28,7 @@ class Renderer {
 
   RendererCore core;
 
-  void init();
+  void init(const RendererSettings& customSettings);
 
   /** World background color */
   void setClearScreenColor(const Color& color) {

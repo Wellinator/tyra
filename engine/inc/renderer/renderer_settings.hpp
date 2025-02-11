@@ -21,11 +21,23 @@ class RendererSettings {
       : width(512.0F),
         height(448.0F),
         interlacedHeightF(height / 2),
-        near(0.1F),
-        far(51200.0F),
+        near(0.01F),
+        far(400.0F),
         projectionScale(4096.0F),
         aspectRatio(width / height),
         interlacedHeightUI(static_cast<unsigned int>(interlacedHeightF)) {}
+
+  RendererSettings(const float _width, const float _height,
+                   const float _near = 0.1F, const float _far = 51200.0F)
+      : width(_width),
+        height(_height),
+        interlacedHeightF(height / 2),
+        near(_near),
+        far(_far),
+        projectionScale(4096.0F),
+        aspectRatio(_width / _height),
+        interlacedHeightUI(static_cast<unsigned int>(interlacedHeightF)) {}
+
   ~RendererSettings();
 
   const float& getWidth() const { return width; }
