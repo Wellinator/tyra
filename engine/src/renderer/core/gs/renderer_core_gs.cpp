@@ -68,7 +68,7 @@ void RendererCoreGS::allocateBuffers() {
   zBuffer.enable = DRAW_ENABLE;
   zBuffer.mask = 0;
   zBuffer.method = ZTEST_METHOD_GREATER_EQUAL;
-  zBuffer.zsm = GS_ZBUF_24;
+  zBuffer.zsm = GS_ZBUF_32;
   zBuffer.address = vram.allocateBuffer(frameBuffers[0].width,
                                         frameBuffers[0].height, zBuffer.zsm);
 
