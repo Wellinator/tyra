@@ -210,17 +210,49 @@ void IrxLoader::waitUntilUsbDeviceIsReady() {
 }
 
 void IrxLoader::loadMemoryCardModules(const bool& verbose) {
+#ifndef TYPE_MC
+#define TYPE_MC
+#endif
+
   if (verbose) TYRA_LOG("IRX: Loading memory card modules...");
 
   int ret;
 
-  SifExecModuleBuffer(&mcman_irx, size_mcman_irx, 0, nullptr, &ret);
-  TYRA_ASSERT(ret >= 0, "Failed to load module: mcman_irx");
+#ifdef TYPE_MC
+  ret = SifLoadModule("rom0:MCMAN", 0, NULL);
+  if (ret < 0) {
+    printf("Failed to load module: MCMAN");
+    SleepThread();
+  }
 
-  SifExecModuleBuffer(&mcserv_irx, size_mcserv_irx, 0, nullptr, &ret);
-  TYRA_ASSERT(ret >= 0, "Failed to load module: mcserv_irx");
+  ret = SifLoadModule("rom0:MCSERV", 0, NULL);
+  if (ret < 0) {
+    printf("Failed to load module: MCSERV");
+    SleepThread();
+  }
+#else
+  ret = SifLoadModule("rom0:XMCMAN", 0, NULL);
+  if (ret < 0) {
+    printf("Failed to load module: MCMAN");
+    SleepThread();
+  }
+
+  ret = SifLoadModule("rom0:XMCSERV", 0, NULL);
+  if (ret < 0) {
+    printf("Failed to load module: MCSERV");
+    SleepThread();
+  }
+#endif
 
   if (verbose) TYRA_LOG("IRX: Memory card modules loaded!");
+
+  TYRA_LOG("IRX: Initializing memory card...");
+
+  ret = mcInit(MC_TYPE_MC);
+
+  TYRA_ASSERT(ret >= 0, "Failed to initialize memory card!");
+
+  TYRA_LOG("IRX: Memory card initialized!");
 }
 
 }  // namespace Tyra
