@@ -17,11 +17,12 @@
 #include <sifrpc.h>
 #include <sbv_patches.h>
 #include <iopcontrol.h>
+#include <libmc.h>
 #include "file/file_utils.hpp"
 
 // external IRX modules
 #define EXTERN_IRX(_irx) \
-  extern u8 _irx[]; \
+  extern u8 _irx[];      \
   extern int size_##_irx
 
 EXTERN_IRX(sio2man_irx);
@@ -34,6 +35,8 @@ EXTERN_IRX(bdm_irx);
 EXTERN_IRX(bdmfs_fatfs_irx);
 EXTERN_IRX(usbd_irx);
 EXTERN_IRX(usbmass_bd_irx);
+EXTERN_IRX(mcserv_irx);
+EXTERN_IRX(mcman_irx);
 
 namespace Tyra {
 
@@ -54,7 +57,8 @@ IrxLoader::IrxLoader() {
 
 IrxLoader::~IrxLoader() {}
 
-void IrxLoader::loadAll(const bool& withUsb, const bool& isLoggingToFile) {
+void IrxLoader::loadAll(const bool& withUsb, const bool& isLoggingToFile,
+                        const bool& loadMemoryCard) {
   if (isLoaded) {
     TYRA_LOG("IRX modules already loaded!");
     return;
@@ -67,6 +71,10 @@ void IrxLoader::loadAll(const bool& withUsb, const bool& isLoggingToFile) {
 
   if (withUsb) {
     loadUsbModules(!isLoggingToFile);
+  }
+
+  if (loadMemoryCard) {
+    loadMemoryCardModules(!isLoggingToFile);
   }
 
   loadAudsrv(true);
@@ -122,7 +130,6 @@ void IrxLoader::loadIO(const bool& verbose) {
   TYRA_ASSERT(ret >= 0, "Failed to load module: fileXio_irx");
 
   if (verbose) TYRA_LOG("IRX: fileXio_irx loaded!");
-
 }
 
 void IrxLoader::loadUsbModules(const bool& verbose) {
@@ -200,6 +207,20 @@ void IrxLoader::waitUntilUsbDeviceIsReady() {
 
     retries--;
   }
+}
+
+void IrxLoader::loadMemoryCardModules(const bool& verbose) {
+  if (verbose) TYRA_LOG("IRX: Loading memory card modules...");
+
+  int ret;
+
+  SifExecModuleBuffer(&mcman_irx, size_mcman_irx, 0, nullptr, &ret);
+  TYRA_ASSERT(ret >= 0, "Failed to load module: mcman_irx");
+
+  SifExecModuleBuffer(&mcserv_irx, size_mcserv_irx, 0, nullptr, &ret);
+  TYRA_ASSERT(ret >= 0, "Failed to load module: mcserv_irx");
+
+  if (verbose) TYRA_LOG("IRX: Memory card modules loaded!");
 }
 
 }  // namespace Tyra
