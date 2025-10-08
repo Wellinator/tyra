@@ -13,6 +13,7 @@
 #include <tyra>
 #include "./renderer_static_pair.hpp"
 #include "./renderer_dynamic_pair.hpp"
+#include "./post_fx_manager.hpp"
 
 using Tyra::CoreBBox;
 using Tyra::DynamicPipeline;
@@ -42,6 +43,8 @@ class GameRenderer {
 
   StaticPipeline stpip;
   DynamicPipeline dypip;
+  PostFxManager postFx;
+  Sprite postFxSprite;
 
   std::vector<RendererStaticPair*> staticPairs;
   std::vector<RendererDynamicPair*> dynamicPairs;

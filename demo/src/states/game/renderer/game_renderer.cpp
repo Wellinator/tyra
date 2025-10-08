@@ -14,11 +14,24 @@ using Tyra::Threading;
 
 namespace Demo {
 
-GameRenderer::GameRenderer(Renderer* t_renderer) {
+GameRenderer::GameRenderer(Renderer* t_renderer) : postFx(t_renderer) {
   renderer = t_renderer;
 
   stpip.setRenderer(&renderer->core);
   dypip.setRenderer(&renderer->core);
+
+  postFxSprite.position.x = 0;
+  postFxSprite.position.y = 0;
+  postFxSprite.size.x = 192.0f;
+  postFxSprite.size.y = 144.0f;
+
+  postFxSprite.color.r = 128.0f;
+  postFxSprite.color.g = 128.0f;
+  postFxSprite.color.b = 128.0f;
+  postFxSprite.color.a = 128.0f;
+
+  postFxSprite.mode = Tyra::SpriteMode::MODE_STRETCH;
+  postFx.pFogTexture->addLink(postFxSprite.id);
 }
 
 GameRenderer::~GameRenderer() {}
@@ -75,6 +88,8 @@ void GameRenderer::render() {
 
   Threading::switchThread();
 
+  postFx.render();
+
   // Render debug stuff after stapip/dynpip, otherwise it will not be visible
   for (auto& bbox : bboxes) {
     renderer->renderer3D.utility.drawBBox(bbox);
@@ -84,6 +99,7 @@ void GameRenderer::render() {
   for (auto& sprite : sprites) {
     renderer->renderer2D.render(sprite);
   }
+  // renderer->renderer2D.render(postFxSprite);
 }
 
 }  // namespace Demo

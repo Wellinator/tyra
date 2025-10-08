@@ -14,6 +14,10 @@
 
 int main() {
   Tyra::EngineOptions options;
+  Tyra::RendererSettings customGraphycsSettings =
+      Tyra::RendererSettings(512.0f, 448.0f, 1.0f, 4000.0f);
+
+  options.customGraphycsSettings = customGraphycsSettings;
 
   if (Demo::IS_REAL_PS2_VIA_USB) {
     options.writeLogsToFile = true;
