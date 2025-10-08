@@ -28,6 +28,8 @@ struct EngineOptions {
   bool writeLogsToFile = false;
 
   bool loadUsbDriver = false;
+
+  bool loadMemoryCardDriver = false;
 };
 
 class Engine {
