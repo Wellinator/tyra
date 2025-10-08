@@ -40,7 +40,8 @@ void Engine::realLoop() {
 
 void Engine::initAll(const EngineOptions& options) {
   srand(time(nullptr));
-  irx.loadAll(options.loadUsbDriver, info.writeLogsToFile);
+  irx.loadAll(options.loadUsbDriver, info.writeLogsToFile,
+              options.loadMemoryCardDriver);
   renderer.init(options.customGraphycsSettings);
   banner.show(&renderer);
   audio.init();

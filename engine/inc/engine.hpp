@@ -30,6 +30,8 @@ struct EngineOptions {
   bool loadUsbDriver = false;
 
   RendererSettings customGraphycsSettings;
+
+  bool loadMemoryCardDriver = false;
 };
 
 class Engine {
