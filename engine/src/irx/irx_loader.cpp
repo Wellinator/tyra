@@ -210,15 +210,14 @@ void IrxLoader::waitUntilUsbDeviceIsReady() {
 }
 
 void IrxLoader::loadMemoryCardModules(const bool& verbose) {
-#ifndef TYPE_MC
-#define TYPE_MC
-#endif
-
   if (verbose) TYRA_LOG("IRX: Loading memory card modules...");
 
   int ret;
+  // mc variables
+  int mc_Type, mc_Free, mc_Format;
 
 #ifdef TYPE_MC
+  TYRA_LOG("IRX: Loading legacy memory card modules...");
   ret = SifLoadModule("rom0:MCMAN", 0, NULL);
   if (ret < 0) {
     printf("Failed to load module: MCMAN");
@@ -231,6 +230,7 @@ void IrxLoader::loadMemoryCardModules(const bool& verbose) {
     SleepThread();
   }
 #else
+  TYRA_LOG("IRX: Loading extended memory card modules...");
   ret = SifLoadModule("rom0:XMCMAN", 0, NULL);
   if (ret < 0) {
     printf("Failed to load module: MCMAN");
@@ -244,13 +244,19 @@ void IrxLoader::loadMemoryCardModules(const bool& verbose) {
   }
 #endif
 
+  TYRA_LOG("IRX: Memory card modules loaded from ROM!");
+
   if (verbose) TYRA_LOG("IRX: Memory card modules loaded!");
 
   TYRA_LOG("IRX: Initializing memory card...");
 
-  ret = mcInit(MC_TYPE_MC);
-
+  ret = mcInit(MC_TYPE_XMC);
   TYRA_ASSERT(ret >= 0, "Failed to initialize memory card!");
+
+  // Since this is the first call, -1 should be returned.
+  // makes me sure that next ones will work !
+  mcGetInfo(0, 0, &mc_Type, &mc_Free, &mc_Format);
+  mcSync(MC_WAIT, NULL, &ret);
 
   TYRA_LOG("IRX: Memory card initialized!");
 }
