@@ -31,3 +31,5 @@
 *.erl
 *.elf
 *.irx
+
+**/*.padLog.txt
