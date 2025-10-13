@@ -630,6 +630,7 @@ void PostFxManager::renderFog(Color fog) {
   // TYRA_LOG("Texture dimensions - tw: ", tw, ", th: ", th);
 
   const framebuffer_t buf_frame = t_renderer->core.gs.getCurrentFrameData();
+  const u8 context = t_renderer->core.gs.getDrawContext();
 
   // TYRA_LOG("Framebuffer address: ", buf_frame.address,
   //  ", width: ", buf_frame.width, ", psm: ", buf_frame.psm);
@@ -645,108 +646,73 @@ void PostFxManager::renderFog(Color fog) {
   copyDepthBuffer(CHANNEL_GREEN, pFogTexture);
   // TYRA_LOG("Z-buffer copy complete");
 
-  // Step 2: Setup GS for indexed texture rendering (G→A channel copy)
-  TYRA_LOG("Step 2: Setting up GS for indexed texture rendering...");
+  // Step 2: Use frame buffer (with modified alpha) as texture
+  // copyDepthBuffer wrote fog intensity to the alpha channel
+  // Now we use that as a texture to blend fog color
+  TYRA_LOG("Step 2: Setting up frame buffer as texture...");
 
-  // Get the fog palette (CLUT) that maps depth to alpha
-  RendererCoreTextureBuffers fogPaletteBuffer =
-      t_renderer->core.texture.updateTextureInfo(pFogTexture);
-
-  // The frame buffer now has depth data in its alpha channel (from
-  // copyDepthBuffer) We need to read it as an 8-bit indexed texture using the
-  // fog palette
-
-  TYRA_LOG("Fog texture info:");
-  TYRA_LOG("  Core address: ", fogPaletteBuffer.core->address);
-  TYRA_LOG("  Core PSM: ", fogPaletteBuffer.core->psm);
-  TYRA_LOG("  CLUT address: ", fogPaletteBuffer.clut->address);
-  TYRA_LOG("  CLUT PSM: ", fogPaletteBuffer.clut->psm);
   TYRA_LOG("Frame buffer address: ", buf_frame.address);
+  TYRA_LOG("Context: ", (int)context);
+  TYRA_LOG("Fog color - R: ", (int)fog.r, ", G: ", (int)fog.g,
+           ", B: ", (int)fog.b);
 
-  if (fogPaletteBuffer.clut->address == 0) {
-    TYRA_WARN("WARNING: CLUT address is 0! Palette not loaded to VRAM!");
-  }
-
-  PACK_GIFTAG(q, GIF_SET_TAG(6, 1, 0, 0, GIF_FLG_PACKED, 1), GIF_REG_AD);
+  PACK_GIFTAG(q, GIF_SET_TAG(5, 1, 0, 0, GIF_FLG_PACKED, 1), GIF_REG_AD);
   q++;
 
   // Reset XY offset for full-screen quad
-  PACK_GIFTAG(q, GS_SET_XYOFFSET(0, 0), GS_REG_XYOFFSET_1);
+  PACK_GIFTAG(q, GS_SET_XYOFFSET(0, 0), GS_REG_XYOFFSET_1 + context);
   q++;
 
-  // Use frame buffer as 8-bit indexed texture
-  // The alpha channel (modified by copyDepthBuffer) acts as the palette index
+  // Use frame buffer as texture to read alpha
   PACK_GIFTAG(
       q,
-      GS_SET_TEX0(
-          buf_frame.address >> 6,  // Frame buffer (with depth in alpha)
-          buf_frame.width >> 6,    // Buffer width in pages
-          GS_PSM_8,                // Read as 8-bit indexed
-          tw, th, 1,
-          TEXTURE_FUNCTION_MODULATE,  // Modulate fog color with texture alpha
-          fogPaletteBuffer.clut->address >> 6,  // Fog palette
-          GS_PSM_32,                            // Palette is RGBA32
-          0, 0, 1),
-      GS_REG_TEX0_1);
+      GS_SET_TEX0(buf_frame.address >> 6,  // Frame buffer with modified alpha
+                  buf_frame.width >> 6,    // Buffer width in pages
+                  GS_PSM_32,               // RGBA32 format
+                  tw, th, 1,
+                  TEXTURE_FUNCTION_MODULATE,  // Modulate primitive with texture
+                  0, 0,                       // No CLUT
+                  0, 0, 1),
+      GS_REG_TEX0_1 + context);
   q++;
 
-  // Clamp texture coordinates to avoid wrapping
+  // Clamp texture coordinates
   PACK_GIFTAG(q, GS_SET_CLAMP(WRAP_CLAMP, WRAP_CLAMP, 0, 0, 0, 0),
-              GS_REG_CLAMP_1);
+              GS_REG_CLAMP_1 + context);
   q++;
 
-  // Setup alpha blending formula: ((A - B) * C) / 128 + D
-  // We want: FogColor * Alpha + SceneColor * (1 - Alpha)
-  // Which translates to: (FogColor - SceneColor) * Alpha + SceneColor
-  //
-  // A = Source color (fog)
-  // B = Destination color (scene)
-  // C = Texture alpha (from palette, depth-based)
-  // D = Destination color (scene)
-  // Result = ((FogColor - SceneColor) * Alpha) / 128 + SceneColor
+  // Setup alpha blending: (Fog - Scene) * TextureAlpha + Scene
+  // Where TextureAlpha comes from frame buffer's alpha channel
   PACK_GIFTAG(
       q,
-      GS_SET_ALPHA(
-          BLEND_COLOR_SOURCE,  // A = Source (fog color from RGBAQ)
-          BLEND_COLOR_DEST,    // B = Dest (scene in frame buffer)
-          BLEND_ALPHA_SOURCE,  // C = Source alpha (from texture/palette)
-          BLEND_COLOR_DEST,    // D = Dest (scene in frame buffer)
-          0x0),
-      GS_REG_ALPHA_1);
+      GS_SET_ALPHA(BLEND_COLOR_SOURCE,  // A = Fog color (from RGBAQ)
+                   BLEND_COLOR_DEST,  // B = Scene color (current frame buffer)
+                   BLEND_ALPHA_SOURCE,  // C = Texture alpha (fog intensity from
+                                        // copyDepthBuffer)
+                   BLEND_COLOR_DEST,    // D = Scene color
+                   0x0),
+      GS_REG_ALPHA_1 + context);
   q++;
 
   // Set primitive color to fog color
-  // The RGB values are the fog color
-  // The alpha will be modulated by the texture (palette lookup based on depth)
-  // Using 0x80 (128) as base alpha for proper modulation
-  TYRA_LOG("Fog color - R: ", (int)fog.r, ", G: ", (int)fog.g,
-           ", B: ", (int)fog.b, ", A: 128");
+  // Texture alpha will modulate this
   PACK_GIFTAG(q,
               GS_SET_RGBAQ((int)fog.r, (int)fog.g, (int)fog.b,
-                           0x80,  // Alpha 128 (will be modulated by texture)
+                           0x80,         // Base alpha 128
                            0x3f800000),  // Q = 1.0
               GS_REG_RGBAQ);
-  q++;
-
-  // Set frame buffer to write all channels
-  PACK_GIFTAG(q,
-              GS_SET_FRAME(buf_frame.address >> 11, buf_frame.width >> 6,
-                           buf_frame.psm, 0x00000000),
-              GS_REG_FRAME_1);
   q++;
 
   TYRA_LOG("GS setup complete, packet count: ", q - packets);
 
   // Step 3: Draw full-screen textured sprite
-  // The texture (frame buffer Green channel) + palette provides depth-based
-  // alpha
-  TYRA_LOG("Step 3: Drawing full-screen textured sprite...");
-  // NLOOP=2 (2 vertices), EOP=1, PRIM enabled, NREG=2 (UV, XYZ2)
+  // The texture is the frame buffer itself, we read its alpha
+  TYRA_LOG("Step 3: Drawing full-screen textured fog sprite...");
   PACK_GIFTAG(q,
               GIF_SET_TAG(2, 1, 1,
                           GS_SET_PRIM(GS_PRIM_SPRITE,
                                       0,  // Flat shading
-                                      1,  // Texture ON (critical!)
+                                      1,  // Texture ON - critical!
                                       0, 0, 0, 1, 0, 0),
                           GIF_FLG_PACKED, 2),
               (GIF_REG_UV) | (GIF_REG_XYZ2 << 4));
@@ -772,7 +738,7 @@ void PostFxManager::renderFog(Color fog) {
       q,
       GS_SET_XYOFFSET(ftoi4(screenCenter - (settings.getWidth() / 2.0F)),
                       ftoi4(screenCenter - (settings.getHeight() / 2.0F))),
-      GS_REG_XYOFFSET_1);
+      GS_REG_XYOFFSET_1 + context);
   q++;
 
   TYRA_LOG("Total packets to send: ", q - packets);
