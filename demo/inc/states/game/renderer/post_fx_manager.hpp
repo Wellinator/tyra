@@ -23,6 +23,7 @@ class PostFxManager {
   ~PostFxManager();
 
   void render(Color fogColor = Color(50, 50, 50));
+  void dumpGsData(char* prefix, bool trap);
   void updateDebugPallet();
 
   Texture* pFogTexture;

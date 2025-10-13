@@ -32,6 +32,19 @@ GameRenderer::GameRenderer(Renderer* t_renderer) : postFx(t_renderer) {
 
   postFxSprite.mode = Tyra::SpriteMode::MODE_STRETCH;
   postFx.pFogTexture->addLink(postFxSprite.id);
+
+  postFxDepthSprite.position.x = 192;
+  postFxDepthSprite.position.y = 0;
+  postFxDepthSprite.size.x = 192.0f;
+  postFxDepthSprite.size.y = 144.0f;
+
+  postFxDepthSprite.color.r = 128.0f;
+  postFxDepthSprite.color.g = 128.0f;
+  postFxDepthSprite.color.b = 128.0f;
+  postFxDepthSprite.color.a = 128.0f;
+
+  postFxDepthSprite.mode = Tyra::SpriteMode::MODE_STRETCH;
+  postFx.pDepthBufferTexture->addLink(postFxDepthSprite.id);
 }
 
 GameRenderer::~GameRenderer() {}
@@ -88,18 +101,31 @@ void GameRenderer::render() {
 
   Threading::switchThread();
 
-  postFx.render();
+  if (downloaded_frame == 0 && frame_count == 100) {
+    postFx.dumpGsData("pre_fog_", false);
+  }
+
+  postFx.render(Color(0, 0, 200, 128));
 
   // Render debug stuff after stapip/dynpip, otherwise it will not be visible
   for (auto& bbox : bboxes) {
     renderer->renderer3D.utility.drawBBox(bbox);
   }
 
+  // renderer->renderer2D.render(postFxSprite);
+  // renderer->renderer2D.render(postFxDepthSprite);
+
+  if (downloaded_frame == 0 && frame_count == 100) {
+    downloaded_frame = 1;
+    frame_count = 0;
+    return postFx.dumpGsData("post_fog_", true);
+  }
+  frame_count++;
+
   // Render 2D
   for (auto& sprite : sprites) {
     renderer->renderer2D.render(sprite);
   }
-  // renderer->renderer2D.render(postFxSprite);
 }
 
 }  // namespace Demo

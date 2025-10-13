@@ -42,23 +42,19 @@ void Renderer3DFrustumPlanes::update(const CameraInfo3D& cameraInfo,
   Y = Z.cross(X);
 
   // compute the center of the near and far planes
-  nearCenter = *cameraInfo.position + (Z * settings->getNear());
-  farCenter = *cameraInfo.position + (Z * settings->getFar());
+  nearCenter = *cameraInfo.position - Z * settings->getNear();
+  farCenter = *cameraInfo.position - Z * settings->getFar();
 
   // compute the 8 corners of the frustum
-  Tyra::Vec4 nearW = X * nearWidth * 0.5f;
-  Tyra::Vec4 nearH = Y * nearHeight * 0.5f;
-  ntl = nearCenter + nearH - nearW;
-  ntr = nearCenter + nearH + nearW;
-  nbl = nearCenter - nearH - nearW;
-  nbr = nearCenter - nearH + nearW;
+  ntl = nearCenter + Y * nearHeight - X * nearWidth;
+  ntr = nearCenter + Y * nearHeight + X * nearWidth;
+  nbl = nearCenter - Y * nearHeight - X * nearWidth;
+  nbr = nearCenter - Y * nearHeight + X * nearWidth;
 
-  Tyra::Vec4 farW = X * farWidth * 0.5f;
-  Tyra::Vec4 farH = Y * farHeight * 0.5f;
-  ftl = farCenter + farH - farW;
-  ftr = farCenter + farH + farW;
-  fbl = farCenter - farH - farW;
-  fbr = farCenter - farH + farW;
+  ftl = farCenter + Y * farHeight - X * farWidth;
+  fbr = farCenter - Y * farHeight + X * farWidth;
+  ftr = farCenter + Y * farHeight + X * farWidth;
+  fbl = farCenter - Y * farHeight - X * farWidth;
 
   frustumPlanes[0].update(ntr, ntl, ftl);  // Top
   frustumPlanes[1].update(nbl, nbr, fbr);  // BOTTOM
@@ -72,10 +68,10 @@ void Renderer3DFrustumPlanes::computeStaticData(const float& fov) {
   if (fabs(fov - lastFov) < 0.00001F) return;
 
   lastFov = fov;
-  float tang = 2.0f * tanf((fov * Math::HALF_ANG2RAD) / 2);
+  float tang = tanf(fov * Math::HALF_ANG2RAD);
   nearHeight = tang * settings->getNear();
-  farHeight = tang * settings->getFar();
   nearWidth = nearHeight * settings->getAspectRatio();
+  farHeight = tang * settings->getFar();
   farWidth = farHeight * settings->getAspectRatio();
 }
 

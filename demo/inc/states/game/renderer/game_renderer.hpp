@@ -45,6 +45,9 @@ class GameRenderer {
   DynamicPipeline dypip;
   PostFxManager postFx;
   Sprite postFxSprite;
+  Sprite postFxDepthSprite;
+  int downloaded_frame = 0;
+  int frame_count = 0;
 
   std::vector<RendererStaticPair*> staticPairs;
   std::vector<RendererDynamicPair*> dynamicPairs;
