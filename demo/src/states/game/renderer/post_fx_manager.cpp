@@ -4,6 +4,8 @@
 #include <dma_tags.h>
 #include <time.h>
 #include <screenshot.h>
+#include <malloc.h>
+#include <string.h>
 
 using Tyra::Color;
 using Tyra::Renderer;
@@ -120,7 +122,14 @@ void PostFxManager::init() {
              " entries");
   }
 
-  t_renderer->core.texture.useTexture(pFogTexture);
+  // IMPORTANT: useTexture() must be called to allocate texture in VRAM
+  // before we can modify CLUT data
+  RendererCoreTextureBuffers fogBuffers =
+      t_renderer->core.texture.useTexture(pFogTexture);
+
+  TYRA_LOG("Fog texture allocated in VRAM:");
+  TYRA_LOG("  - Texture address: ", fogBuffers.core->address);
+  TYRA_LOG("  - CLUT address: ", fogBuffers.clut->address);
 
   // uint8_t fog_scale[18] = {1, 1, 0, 0, 0, 0, 0, 0, 0,
   //                          0, 0, 0, 0, 0, 0, 0, 0, 0};
@@ -131,7 +140,13 @@ void PostFxManager::init() {
   uint8_t fog_scale[18] = {1, 1, 2, 3, 10, 7, 3, 2, 1,
                            1, 0, 0, 0, 0,  0, 0, 0, 0};
 
+  // First set alpha values in CLUT (depth-based fog intensity)
   scaleDepthMask(pFogTexture, 1, fog_scale);
+
+  // Then apply initial fog color to palette (default gray fog)
+  // This sets RGB values in the palette, alpha comes from scaleDepthMask
+  // NOTE: Must be called AFTER scaleDepthMask to preserve alpha values
+  applyFogColorToPalette(Color(128, 128, 128));
 
   TYRA_LOG("Fog palette initialized with ", 256, " entries");
 };
@@ -183,6 +198,14 @@ void PostFxManager::dumpGsData(char* prefix, bool trap) {
 }
 
 void PostFxManager::render(Color fogColor) {
+  // Update fog color in palette only if it changed (optimization)
+  if (fogColor.r != currentFogColor.r || fogColor.g != currentFogColor.g ||
+      fogColor.b != currentFogColor.b) {
+    applyFogColorToPalette(fogColor);
+    currentFogColor = fogColor;
+    TYRA_LOG("Fog color changed, palette updated");
+  }
+
   // Apply the post effects
   renderFog(fogColor);
 
@@ -371,7 +394,7 @@ void PostFxManager::copyDepthBuffer(ColourChannels channelIn,
       dma_channel_fast_waits(DMA_CHANNEL_GIF);
       dma_wait_fast();
 
-      performChannelCopy(channelIn, CHANNEL_ALPHA, x, y, buf_addr, width,
+      performChannelCopy(channelIn, CHANNEL_GREEN, x, y, buf_addr, width,
                          height, pal_addr);
 
       page += 32;
@@ -566,6 +589,82 @@ void PostFxManager::setTwTh(int w, int h, int* tw, int* th) {
   if (h > (1 << *th)) (*th)++;
 }
 
+void PostFxManager::uploadClutToVram(Texture* texture) {
+  // Upload CLUT directly to VRAM using BITBLTBUF + TRXDIR
+  // This bypasses the need for texture to be "linked" to a sprite
+
+  if (texture == nullptr || texture->clut == nullptr) {
+    TYRA_WARN("Cannot upload CLUT: texture or CLUT is null!");
+    return;
+  }
+
+  // Get CLUT info from texture buffers
+  RendererCoreTextureBuffers texBuffers =
+      t_renderer->core.texture.useTexture(texture);
+
+  uint32_t clut_addr = texBuffers.clut->address;
+  uint32_t clut_width = texture->clut->width;
+  uint32_t clut_height = texture->clut->height;
+  uint32_t clut_size =
+      clut_width * clut_height * 4;  // RGBA32 = 4 bytes per pixel
+
+  TYRA_LOG("Uploading CLUT to VRAM:");
+  TYRA_LOG("  - Address: ", clut_addr);
+  TYRA_LOG("  - Size: ", clut_width, "x", clut_height, " (", clut_size,
+           " bytes)");
+
+  // Create DMA packet for CLUT upload
+  qword_t* packets = (qword_t*)memalign(64, sizeof(qword_t) * 128);
+  qword_t* q = packets;
+
+  // Setup BITBLTBUF for host-to-local transfer
+  PACK_GIFTAG(q, GIF_SET_TAG(4, 1, 0, 0, GIF_FLG_PACKED, 1), GIF_REG_AD);
+  q++;
+
+  PACK_GIFTAG(
+      q,
+      GS_SET_BITBLTBUF(0, 0, 0,                        // Source: host memory
+                       clut_addr >> 6, 0, GS_PSM_32),  // Dest: CLUT in VRAM
+      GS_REG_BITBLTBUF);
+  q++;
+
+  PACK_GIFTAG(q, GS_SET_TRXPOS(0, 0, 0, 0, 0), GS_REG_TRXPOS);
+  q++;
+
+  PACK_GIFTAG(q, (uint64_t)(clut_width) | ((uint64_t)(clut_height) << 32),
+              GS_REG_TRXREG);
+  q++;
+
+  PACK_GIFTAG(q, 0L, GS_REG_TRXDIR);  // 0 = host-to-local
+  q++;
+
+  // Send setup packets
+  FlushCache(0);
+  dma_channel_send_normal(DMA_CHANNEL_GIF, packets, q - packets, 0, 0);
+  dma_wait_fast();
+
+  // Now send actual CLUT data
+  uint32_t qword_count = (clut_size + 15) / 16;  // Round up to qwords
+
+  q = packets;
+  PACK_GIFTAG(q, GIF_SET_TAG(qword_count, 0, 0, 0, GIF_FLG_IMAGE, 0), 0);
+  q++;
+
+  // Copy CLUT data
+  uint32_t* clut_data = reinterpret_cast<uint32_t*>(texture->clut->data);
+  memcpy(q, clut_data, clut_size);
+  q += qword_count;
+
+  // Send CLUT data
+  FlushCache(0);
+  dma_channel_send_normal(DMA_CHANNEL_GIF, packets, q - packets, 0, 0);
+  dma_wait_fast();
+
+  free(packets);
+
+  TYRA_LOG("CLUT uploaded successfully");
+}
+
 void PostFxManager::scaleDepthMask(Texture* palette, uint8_t initial_value,
                                    uint8_t factors[16]) {
   int i, j, k = initial_value;
@@ -578,14 +677,18 @@ void PostFxManager::scaleDepthMask(Texture* palette, uint8_t initial_value,
   // Access the CLUT data (palette), not the texture data
   uint32_t* pal_rgba = reinterpret_cast<uint32_t*>(palette->clut->data);
 
-  printf("Fog palette values: \n");
+  printf("Fog palette values (alpha): \n");
 
   for (j = 0; j < 16; j++) {
     for (i = factor_order[j][0]; i <= factor_order[j][1]; i++) {
-      // Store alpha in the alpha channel (PS2 format: RGBA)
-      // RGB can be white (0xFF) or match fog color, alpha controls intensity
-      pal_rgba[i] = (k << 24) |  // Alpha channel (fog intensity)
-                    (0xFF << 16) | (0xFF << 8) | 0xFF;  // RGB = white
+      // PS2 format: RGBA (each 8 bits)
+      // We store fog color (will be set dynamically) with depth-based alpha
+      // For now, use white color - will be modulated with primitive color
+      // Alpha increases with depth index = more fog at distance
+      pal_rgba[i] = (k << 24) |     // Alpha (fog intensity based on depth)
+                    (0xFF << 16) |  // R = white (will be modulated)
+                    (0xFF << 8) |   // G = white
+                    0xFF;           // B = white
 
       printf("%i,", k);
 
@@ -599,10 +702,42 @@ void PostFxManager::scaleDepthMask(Texture* palette, uint8_t initial_value,
 
   printf("\n");
 
-  // Upload the updated palette to VRAM
-  t_renderer->core.texture.updateTextureInfo(palette);
+  // Upload the updated palette to VRAM directly
+  uploadClutToVram(palette);
 
-  TYRA_LOG("Palette updated and uploaded to VRAM");
+  TYRA_LOG("Palette updated and uploaded to VRAM with ", 256, " fog entries");
+}
+
+void PostFxManager::applyFogColorToPalette(Color fogColor) {
+  // Apply fog color to all palette entries while preserving alpha values
+  // This allows dynamic fog color without rebuilding the entire palette
+
+  // Safety check: ensure CLUT exists and is allocated
+  if (pFogTexture == nullptr || pFogTexture->clut == nullptr) {
+    TYRA_WARN("Cannot apply fog color: CLUT is not initialized!");
+    return;
+  }
+
+  if (pFogTexture->clut->data == nullptr) {
+    TYRA_WARN("Cannot apply fog color: CLUT data is null!");
+    return;
+  }
+
+  uint32_t* pal_rgba = reinterpret_cast<uint32_t*>(pFogTexture->clut->data);
+
+  for (int i = 0; i < 256; i++) {
+    uint32_t current_alpha = pal_rgba[i] & 0xFF000000;  // Preserve alpha
+    pal_rgba[i] = current_alpha |                       // Keep alpha
+                  ((uint32_t)fogColor.r << 16) |        // Set R
+                  ((uint32_t)fogColor.g << 8) |         // Set G
+                  (uint32_t)fogColor.b;                 // Set B
+  }
+
+  // Upload updated palette to VRAM directly
+  uploadClutToVram(pFogTexture);
+
+  TYRA_LOG("Fog color updated in palette: R=", (int)fogColor.r,
+           " G=", (int)fogColor.g, " B=", (int)fogColor.b);
 }
 
 void PostFxManager::renderFog(Color fog) {
@@ -632,24 +767,37 @@ void PostFxManager::renderFog(Color fog) {
   qword_t packets[500] ALIGNED(64);
   qword_t* q = packets;
 
-  // Step 1: Copy Z-buffer to Alpha channel
-  // This transfers depth information into the frame buffer's alpha channel
-  // TYRA_LOG("Step 1: Copying Z-buffer to Alpha channel...");
+  // Note: Fog color should be updated via applyFogColorToPalette() only when
+  // needed Not every frame for performance reasons
+
+  // Step 1: Copy Z-buffer to GREEN channel of frame buffer
+  // This creates a "depth texture" in the GREEN channel
+  // We use GREEN because of PS2's swizzled memory layout
+  TYRA_LOG("Step 1: Copying Z-buffer to GREEN channel...");
   copyDepthBuffer(CHANNEL_GREEN, pFogTexture);
-  // TYRA_LOG("Z-buffer copy complete");
+  TYRA_LOG("Z-buffer copy complete");
 
   // Wait for DMA to complete before using the result
   dma_wait_fast();
 
-  // Step 2: Use frame buffer (with modified alpha) as texture
-  // copyDepthBuffer wrote fog intensity to the alpha channel
-  // Now we use that as a texture to blend fog color
-  TYRA_LOG("Step 2: Setting up frame buffer as texture...");
+  // Step 2: Setup to read frame buffer GREEN as 8-bit indexed texture
+  // The GREEN values (depth) will index into our fog palette (CLUT)
+  // This is the core of the "channel copying" technique
+  TYRA_LOG("Step 2: Setting up paletized texture from frame buffer...");
 
   TYRA_LOG("Frame buffer address: ", buf_frame.address);
   TYRA_LOG("Context: ", (int)context);
   TYRA_LOG("Fog color - R: ", (int)fog.r, ", G: ", (int)fog.g,
            ", B: ", (int)fog.b);
+
+  // Get fog palette (CLUT) address
+  RendererCoreTextureBuffers fogTexBuffer =
+      t_renderer->core.texture.useTexture(pFogTexture);
+  uint32_t clut_addr = fogTexBuffer.clut->address;
+
+  TYRA_LOG("CLUT address: ", clut_addr);
+  TYRA_LOG("CLUT address (shifted): ", clut_addr >> 6);
+  TYRA_LOG("Texture dimensions - TW: ", tw, ", TH: ", th);
 
   PACK_GIFTAG(q, GIF_SET_TAG(6, 1, 0, 0, GIF_FLG_PACKED, 1), GIF_REG_AD);
   q++;
@@ -661,16 +809,19 @@ void PostFxManager::renderFog(Color fog) {
               GS_REG_ZBUF_1 + context);
   q++;
 
-  // Use frame buffer as texture to read alpha
+  // CRITICAL: Use frame buffer GREEN channel as 8-bit indexed texture with fog
+  // CLUT The frame buffer must be read as PSMT8 to use GREEN as palette index
+  // CSM=1 enables Color Storage Mode for channel swizzling
   PACK_GIFTAG(
       q,
-      GS_SET_TEX0(buf_frame.address >> 6,  // Frame buffer with modified alpha
+      GS_SET_TEX0(buf_frame.address >> 6,  // Frame buffer (has depth in GREEN)
                   buf_frame.width >> 6,    // Buffer width in pages
-                  GS_PSM_32,               // RGBA32 format
+                  GS_PSM_8,                // *** 8-bit indexed! ***
                   tw, th, 1,
-                  TEXTURE_FUNCTION_MODULATE,  // Modulate primitive with texture
-                  0, 0,                       // No CLUT
-                  0, 0, 1),
+                  TEXTURE_FUNCTION_MODULATE,  // Modulate with primitive color
+                  clut_addr >> 6,             // *** Fog palette address ***
+                  GS_PSM_32,                  // CLUT format (RGBA32)
+                  1, 0, 1),                   // CSM=1 for channel swizzling
       GS_REG_TEX0_1 + context);
   q++;
 
@@ -679,30 +830,31 @@ void PostFxManager::renderFog(Color fog) {
               GS_REG_CLAMP_1 + context);
   q++;
 
-  // Setup alpha blending: (Fog - Scene) * TextureAlpha + Scene
-  // Where TextureAlpha comes from frame buffer's alpha channel
-  PACK_GIFTAG(
-      q,
-      GS_SET_ALPHA(BLEND_COLOR_SOURCE,  // A = Fog color (from RGBAQ)
-                   BLEND_COLOR_DEST,  // B = Scene color (current frame buffer)
-                   BLEND_ALPHA_SOURCE,  // C = Texture alpha (fog intensity from
-                                        // copyDepthBuffer)
-                   BLEND_COLOR_DEST,    // D = Scene color
-                   0x0),
-      GS_REG_ALPHA_1 + context);
+  // Setup alpha blending: (Texture - Dest) * TextureAlpha + Dest
+  // Texture color comes from CLUT (fog color with depth-based alpha)
+  // This blends fog color over scene based on depth
+  PACK_GIFTAG(q,
+              GS_SET_ALPHA(BLEND_COLOR_SOURCE,  // A = Texture (from CLUT)
+                           BLEND_COLOR_DEST,    // B = Current frame buffer
+                           BLEND_ALPHA_SOURCE,  // C = Texture alpha (from CLUT)
+                           BLEND_COLOR_DEST,    // D = Current frame buffer
+                           0x0),
+              GS_REG_ALPHA_1 + context);
   q++;
 
   // Reset XY offset for full-screen quad
   PACK_GIFTAG(q, GS_SET_XYOFFSET(0, 0), GS_REG_XYOFFSET_1 + context);
   q++;
 
-  // Set primitive color to fog color
-  // Texture alpha will modulate this
-  PACK_GIFTAG(q,
-              GS_SET_RGBAQ((int)fog.r, (int)fog.g, (int)fog.b,
-                           0x80,         // Base alpha 128
-                           0x3f800000),  // Q = 1.0
-              GS_REG_RGBAQ);
+  // Set primitive color to WHITE so texture color from CLUT passes through
+  // unchanged The fog color and alpha are already in the CLUT palette Using
+  // full white (255) ensures no color attenuation
+  PACK_GIFTAG(
+      q,
+      GS_SET_RGBAQ(0xFF, 0xFF, 0xFF,  // RGB = pure white (no modulation)
+                   0x80,              // Alpha = 128
+                   0x3f800000),       // Q = 1.0
+      GS_REG_RGBAQ);
   q++;
 
   TYRA_LOG("GS setup complete, packet count: ", q - packets);
@@ -721,15 +873,17 @@ void PostFxManager::renderFog(Color fog) {
   q++;
 
   // Top-left corner (UV and XYZ)
-  PACK_GIFTAG(q, GIF_SET_UV(ftoi4(0), ftoi4(0)), 0);
+  // UV in 12.4 fixed point format (ftoi4 = multiply by 16)
+  PACK_GIFTAG(q, GIF_SET_UV(ftoi4(0.0f), ftoi4(0.0f)), 0);
   q++;
-  PACK_GIFTAG(q, GIF_SET_XYZ(ftoi4(0), ftoi4(0), 0), 0);
+  PACK_GIFTAG(q, GIF_SET_XYZ(ftoi4(0.0f), ftoi4(0.0f), 0), 0);
   q++;
 
   // Bottom-right corner (UV and XYZ)
-  PACK_GIFTAG(q, GIF_SET_UV(ftoi4(width), ftoi4(height)), 0);
+  // Map full frame buffer to full screen for 1:1 correspondence
+  PACK_GIFTAG(q, GIF_SET_UV(ftoi4((float)width), ftoi4((float)height)), 0);
   q++;
-  PACK_GIFTAG(q, GIF_SET_XYZ(ftoi4(width), ftoi4(height), 0), 0);
+  PACK_GIFTAG(q, GIF_SET_XYZ(ftoi4((float)width), ftoi4((float)height), 0), 0);
   q++;
 
   // Restore XY offset and Z-buffer
