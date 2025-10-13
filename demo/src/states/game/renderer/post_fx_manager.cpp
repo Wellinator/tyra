@@ -141,24 +141,26 @@ void PostFxManager::dumpGsData(char* prefix, bool trap) {
 
   RendererCoreTextureBuffers depthTexBuffer =
       t_renderer->core.texture.useTexture(pDepthBufferTexture);
-  ps2_screenshot_file(
-      Tyra::FileUtils::fromCwd(std::string("gs_debug/") + prefix +
-                               "_depth_buffer_tex.tga")
-          .c_str(),
-      depthTexBuffer.clut->address >> 6, pDepthBufferTexture->core->width,
-      pDepthBufferTexture->core->height, depthTexBuffer.clut->psm);
+  // ps2_screenshot_file(
+  //     Tyra::FileUtils::fromCwd(std::string("gs_debug/") + prefix +
+  //                              "_depth_buffer_tex.tga")
+  //     .c_str(),
+  // depthTexBuffer.clut->address >> 6, pDepthBufferTexture->core->width,
+  // pDepthBufferTexture->core->height, depthTexBuffer.clut->psm);
 
-  RendererCoreTextureBuffers fogTexBuffer =
-      t_renderer->core.texture.useTexture(pFogTexture);
-  ps2_screenshot_file((std::string(prefix) + "_color_buffer_tex.tga").c_str(),
-                      fogTexBuffer.clut->address >> 6, pFogTexture->core->width,
-                      pFogTexture->core->height, fogTexBuffer.clut->psm);
+  // RendererCoreTextureBuffers fogTexBuffer =
+  //     t_renderer->core.texture.useTexture(pFogTexture);
+  // ps2_screenshot_file((std::string(prefix) +
+  // "_color_buffer_tex.tga").c_str(),
+  //                     fogTexBuffer.clut->address >> 6,
+  //                     pFogTexture->core->width, pFogTexture->core->height,
+  //                     fogTexBuffer.clut->psm);
 
-  uint32_t width = settings.getWidth(), height = settings.getHeight();
+  // uint32_t width = settings.getWidth(), height = settings.getHeight();
   const zbuffer_t zbuffer = t_renderer->core.gs.zBuffer;
-  printf("zbuffer.address: %X\n", zbuffer.address);
-  ps2_screenshot_file((std::string(prefix) + "_depth_buffer.tga").c_str(),
-                      zbuffer.address >> 6, width, height, zbuffer.zsm);
+  // printf("zbuffer.address: %X\n", zbuffer.address);
+  // ps2_screenshot_file((std::string(prefix) + "_depth_buffer.tga").c_str(),
+  //                     zbuffer.address >> 6, width, height, zbuffer.zsm);
 
   const framebuffer_t front_buffer = t_renderer->core.gs.getFrameBuffer(0);
   printf("front_buffer.address: %X\n", front_buffer.address);
@@ -181,38 +183,28 @@ void PostFxManager::dumpGsData(char* prefix, bool trap) {
 }
 
 void PostFxManager::render(Color fogColor) {
-  // Set GS settings
-  qword_t packets[20] ALIGNED(64);
-  qword_t* q = packets;
-
-  q = draw_disable_tests(q, 0, &t_renderer->core.gs.zBuffer);
-
-  dma_channel_send_normal(DMA_CHANNEL_GIF, packets, q - packets, 0, 0);
-  dma_wait_fast();
-
   // Apply the post effects
   renderFog(fogColor);
 
-  // Reset GS old settings
-  q = packets;
+  // Reset GS settings after fog
+  const u8 context = t_renderer->core.gs.getDrawContext();
+  qword_t packets[20] ALIGNED(64);
+  qword_t* q = packets;
 
   PACK_GIFTAG(q, GIF_SET_TAG(2, 1, 0, 0, GIF_FLG_PACKED, 1), GIF_REG_AD);
   q++;
 
-  // Alpha Blending
+  // Restore default alpha blending
   PACK_GIFTAG(q,
               GS_SET_ALPHA(BLEND_COLOR_SOURCE, BLEND_COLOR_DEST,
                            BLEND_ALPHA_SOURCE, BLEND_COLOR_DEST, 0x80),
-              GS_REG_ALPHA_1);
+              GS_REG_ALPHA_1 + context);
   q++;
 
+  // Restore default clamp mode
   PACK_GIFTAG(q, GS_SET_CLAMP(WRAP_CLAMP, WRAP_CLAMP, 0, 0, 0, 0),
-              GS_REG_CLAMP_1);
+              GS_REG_CLAMP_1 + context);
   q++;
-
-  q = draw_enable_tests(q, 0, &t_renderer->core.gs.zBuffer);
-
-  q = draw_texture_expand_alpha(q, 0x80, ALPHA_EXPAND_NORMAL, 0x80);
 
   dma_channel_send_normal(DMA_CHANNEL_GIF, packets, q - packets, 0, 0);
   dma_wait_fast();
@@ -640,11 +632,14 @@ void PostFxManager::renderFog(Color fog) {
   qword_t packets[500] ALIGNED(64);
   qword_t* q = packets;
 
-  // Step 1: Copy Z-buffer to Green channel
-  // This transfers depth information into the frame buffer
-  // TYRA_LOG("Step 1: Copying Z-buffer to Green channel...");
+  // Step 1: Copy Z-buffer to Alpha channel
+  // This transfers depth information into the frame buffer's alpha channel
+  // TYRA_LOG("Step 1: Copying Z-buffer to Alpha channel...");
   copyDepthBuffer(CHANNEL_GREEN, pFogTexture);
   // TYRA_LOG("Z-buffer copy complete");
+
+  // Wait for DMA to complete before using the result
+  dma_wait_fast();
 
   // Step 2: Use frame buffer (with modified alpha) as texture
   // copyDepthBuffer wrote fog intensity to the alpha channel
@@ -656,11 +651,14 @@ void PostFxManager::renderFog(Color fog) {
   TYRA_LOG("Fog color - R: ", (int)fog.r, ", G: ", (int)fog.g,
            ", B: ", (int)fog.b);
 
-  PACK_GIFTAG(q, GIF_SET_TAG(5, 1, 0, 0, GIF_FLG_PACKED, 1), GIF_REG_AD);
+  PACK_GIFTAG(q, GIF_SET_TAG(6, 1, 0, 0, GIF_FLG_PACKED, 1), GIF_REG_AD);
   q++;
 
-  // Reset XY offset for full-screen quad
-  PACK_GIFTAG(q, GS_SET_XYOFFSET(0, 0), GS_REG_XYOFFSET_1 + context);
+  // Disable Z-buffer writes during fog rendering
+  PACK_GIFTAG(q,
+              GS_SET_ZBUF(t_renderer->core.gs.zBuffer.address >> 13,
+                          t_renderer->core.gs.zBuffer.zsm, 1),
+              GS_REG_ZBUF_1 + context);
   q++;
 
   // Use frame buffer as texture to read alpha
@@ -694,6 +692,10 @@ void PostFxManager::renderFog(Color fog) {
       GS_REG_ALPHA_1 + context);
   q++;
 
+  // Reset XY offset for full-screen quad
+  PACK_GIFTAG(q, GS_SET_XYOFFSET(0, 0), GS_REG_XYOFFSET_1 + context);
+  q++;
+
   // Set primitive color to fog color
   // Texture alpha will modulate this
   PACK_GIFTAG(q,
@@ -719,19 +721,19 @@ void PostFxManager::renderFog(Color fog) {
   q++;
 
   // Top-left corner (UV and XYZ)
-  PACK_GIFTAG(q, GIF_SET_UV(0, 0), 0);
+  PACK_GIFTAG(q, GIF_SET_UV(ftoi4(0), ftoi4(0)), 0);
   q++;
-  PACK_GIFTAG(q, GIF_SET_XYZ(0 << 4, 0 << 4, 0), 0);
+  PACK_GIFTAG(q, GIF_SET_XYZ(ftoi4(0), ftoi4(0), 0), 0);
   q++;
 
   // Bottom-right corner (UV and XYZ)
-  PACK_GIFTAG(q, GIF_SET_UV((width) << 4, (height) << 4), 0);
+  PACK_GIFTAG(q, GIF_SET_UV(ftoi4(width), ftoi4(height)), 0);
   q++;
-  PACK_GIFTAG(q, GIF_SET_XYZ((width) << 4, (height) << 4, 0), 0);
+  PACK_GIFTAG(q, GIF_SET_XYZ(ftoi4(width), ftoi4(height), 0), 0);
   q++;
 
-  // Restore XY offset
-  PACK_GIFTAG(q, GIF_SET_TAG(1, 1, 0, 0, GIF_FLG_PACKED, 1), GIF_REG_AD);
+  // Restore XY offset and Z-buffer
+  PACK_GIFTAG(q, GIF_SET_TAG(2, 1, 0, 0, GIF_FLG_PACKED, 1), GIF_REG_AD);
   q++;
 
   PACK_GIFTAG(
@@ -739,6 +741,13 @@ void PostFxManager::renderFog(Color fog) {
       GS_SET_XYOFFSET(ftoi4(screenCenter - (settings.getWidth() / 2.0F)),
                       ftoi4(screenCenter - (settings.getHeight() / 2.0F))),
       GS_REG_XYOFFSET_1 + context);
+  q++;
+
+  // Re-enable Z-buffer writes
+  PACK_GIFTAG(q,
+              GS_SET_ZBUF(t_renderer->core.gs.zBuffer.address >> 13,
+                          t_renderer->core.gs.zBuffer.zsm, 0),
+              GS_REG_ZBUF_1 + context);
   q++;
 
   TYRA_LOG("Total packets to send: ", q - packets);

@@ -101,16 +101,21 @@ void GameRenderer::render() {
 
   Threading::switchThread();
 
-  if (downloaded_frame == 0 && frame_count == 100) {
-    postFx.dumpGsData("pre_fog_", false);
+  // Render 2D
+  for (auto& sprite : sprites) {
+    renderer->renderer2D.render(sprite);
   }
-
-  postFx.render(Color(0, 0, 200, 128));
 
   // Render debug stuff after stapip/dynpip, otherwise it will not be visible
   for (auto& bbox : bboxes) {
     renderer->renderer3D.utility.drawBBox(bbox);
   }
+
+  if (downloaded_frame == 0 && frame_count == 100) {
+    postFx.dumpGsData("pre_fog_", false);
+  }
+
+  postFx.render(Color(0, 0, 200, 128));
 
   // renderer->renderer2D.render(postFxSprite);
   // renderer->renderer2D.render(postFxDepthSprite);
@@ -121,11 +126,6 @@ void GameRenderer::render() {
     return postFx.dumpGsData("post_fog_", true);
   }
   frame_count++;
-
-  // Render 2D
-  for (auto& sprite : sprites) {
-    renderer->renderer2D.render(sprite);
-  }
 }
 
 }  // namespace Demo
