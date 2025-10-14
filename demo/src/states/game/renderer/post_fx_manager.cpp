@@ -743,153 +743,88 @@ void PostFxManager::applyFogColorToPalette(Color fogColor) {
 void PostFxManager::renderFog(Color fog) {
   TYRA_LOG("=== renderFog START ===");
 
-  // For debug frames
-  // nanosleep((const struct timespec[]){{0, 1000000000L}}, NULL);
-
   uint32_t width = settings.getWidth(), height = settings.getHeight();
-  u32 tw = draw_log2(width), th = draw_log2(height);
-
-  TYRA_LOG("Screen dimensions - width: ", width, ", height: ", height);
-
-  // int tw, th;
-  // setTwTh(width, height, &tw, &th);
-
-  // TYRA_LOG("Texture dimensions - tw: ", tw, ", th: ", th);
 
   const framebuffer_t buf_frame = t_renderer->core.gs.getCurrentFrameData();
+  const zbuffer_t& zbuffer = t_renderer->core.gs.zBuffer;
   const u8 context = t_renderer->core.gs.getDrawContext();
 
-  // TYRA_LOG("Framebuffer address: ", buf_frame.address,
-  //  ", width: ", buf_frame.width, ", psm: ", buf_frame.psm);
-  // TYRA_LOG("Z-buffer address: ", zbuffer.address, ", zsm: ",
-  // zbuffer.zsm);
+  TYRA_LOG("Applying fog - Context: ", (int)context);
+  TYRA_LOG("Color: R=", (int)fog.r, " G=", (int)fog.g, " B=", (int)fog.b);
 
   qword_t packets[500] ALIGNED(64);
   qword_t* q = packets;
 
-  // Note: Fog color should be updated via applyFogColorToPalette() only when
-  // needed Not every frame for performance reasons
-
-  // Step 1: Copy Z-buffer to GREEN channel of frame buffer
-  // This creates a "depth texture" in the GREEN channel
-  // We use GREEN because of PS2's swizzled memory layout
-  TYRA_LOG("Step 1: Copying Z-buffer to GREEN channel...");
-  copyDepthBuffer(CHANNEL_GREEN, pFogTexture);
-  TYRA_LOG("Z-buffer copy complete");
-
-  // Wait for DMA to complete before using the result
-  dma_wait_fast();
-
-  // Step 2: Setup to read frame buffer GREEN as 8-bit indexed texture
-  // The GREEN values (depth) will index into our fog palette (CLUT)
-  // This is the core of the "channel copying" technique
-  TYRA_LOG("Step 2: Setting up paletized texture from frame buffer...");
-
-  TYRA_LOG("Frame buffer address: ", buf_frame.address);
-  TYRA_LOG("Context: ", (int)context);
-  TYRA_LOG("Fog color - R: ", (int)fog.r, ", G: ", (int)fog.g,
-           ", B: ", (int)fog.b);
-
-  // Get fog palette (CLUT) address
-  RendererCoreTextureBuffers fogTexBuffer =
-      t_renderer->core.texture.useTexture(pFogTexture);
-  uint32_t clut_addr = fogTexBuffer.clut->address;
-
-  TYRA_LOG("CLUT address: ", clut_addr);
-  TYRA_LOG("CLUT address (shifted): ", clut_addr >> 6);
-  TYRA_LOG("Texture dimensions - TW: ", tw, ", TH: ", th);
-
+  // Step 1: Setup GS state for post-processing overlay
+  // Critical: Set XYOFFSET to 0 BEFORE drawing to use absolute screen
+  // coordinates
   PACK_GIFTAG(q, GIF_SET_TAG(6, 1, 0, 0, GIF_FLG_PACKED, 1), GIF_REG_AD);
   q++;
 
-  // Disable Z-buffer writes during fog rendering
-  PACK_GIFTAG(q,
-              GS_SET_ZBUF(t_renderer->core.gs.zBuffer.address >> 13,
-                          t_renderer->core.gs.zBuffer.zsm, 1),
-              GS_REG_ZBUF_1 + context);
-  q++;
-
-  // CRITICAL: Use frame buffer GREEN channel as 8-bit indexed texture with fog
-  // CLUT The frame buffer must be read as PSMT8 to use GREEN as palette index
-  // CSM=1 enables Color Storage Mode for channel swizzling
-  PACK_GIFTAG(
-      q,
-      GS_SET_TEX0(buf_frame.address >> 6,  // Frame buffer (has depth in GREEN)
-                  buf_frame.width >> 6,    // Buffer width in pages
-                  GS_PSM_8,                // *** 8-bit indexed! ***
-                  tw, th, 1,
-                  TEXTURE_FUNCTION_MODULATE,  // Modulate with primitive color
-                  clut_addr >> 6,             // *** Fog palette address ***
-                  GS_PSM_32,                  // CLUT format (RGBA32)
-                  1, 0, 1),                   // CSM=1 for channel swizzling
-      GS_REG_TEX0_1 + context);
-  q++;
-
-  // Clamp texture coordinates
-  PACK_GIFTAG(q, GS_SET_CLAMP(WRAP_CLAMP, WRAP_CLAMP, 0, 0, 0, 0),
-              GS_REG_CLAMP_1 + context);
-  q++;
-
-  // Setup alpha blending: (Texture - Dest) * TextureAlpha + Dest
-  // Texture color comes from CLUT (fog color with depth-based alpha)
-  // This blends fog color over scene based on depth
-  PACK_GIFTAG(q,
-              GS_SET_ALPHA(BLEND_COLOR_SOURCE,  // A = Texture (from CLUT)
-                           BLEND_COLOR_DEST,    // B = Current frame buffer
-                           BLEND_ALPHA_SOURCE,  // C = Texture alpha (from CLUT)
-                           BLEND_COLOR_DEST,    // D = Current frame buffer
-                           0x0),
-              GS_REG_ALPHA_1 + context);
-  q++;
-
-  // Reset XY offset for full-screen quad
+  // Set XYOFFSET to (0,0) for absolute screen-space rendering
   PACK_GIFTAG(q, GS_SET_XYOFFSET(0, 0), GS_REG_XYOFFSET_1 + context);
   q++;
 
-  // Set primitive color to WHITE so texture color from CLUT passes through
-  // unchanged The fog color and alpha are already in the CLUT palette Using
-  // full white (255) ensures no color attenuation
+  // Disable Z-buffer writes (but not tests - we want to preserve depth)
+  PACK_GIFTAG(q, GS_SET_ZBUF(zbuffer.address >> 13, zbuffer.zsm, 1),
+              GS_REG_ZBUF_1 + context);
+  q++;
+
+  // Explicitly disable texture mapping by setting TEX0 to zero
+  PACK_GIFTAG(q, 0L, GS_REG_TEX0_1 + context);
+  q++;
+
+  // Disable texture mapping in TEX1 as well
+  PACK_GIFTAG(q, 0L, GS_REG_TEX1_1 + context);
+  q++;
+
+  // ALPHA register: Simple alpha blending
+  // (Cs - Cd) * As + Cd = blend fog over scene
+  PACK_GIFTAG(q,
+              GS_SET_ALPHA(BLEND_COLOR_SOURCE, BLEND_COLOR_DEST,
+                           BLEND_ALPHA_SOURCE, BLEND_COLOR_DEST, 0x0),
+              GS_REG_ALPHA_1 + context);
+  q++;
+
+  // RGBAQ: Set fog color with alpha
   PACK_GIFTAG(
-      q,
-      GS_SET_RGBAQ(0xFF, 0xFF, 0xFF,  // RGB = pure white (no modulation)
-                   0x80,              // Alpha = 128
-                   0x3f800000),       // Q = 1.0
+      q, GS_SET_RGBAQ((int)fog.r, (int)fog.g, (int)fog.b, 0x80, 0x3f800000),
       GS_REG_RGBAQ);
   q++;
 
-  TYRA_LOG("GS setup complete, packet count: ", q - packets);
+  TYRA_LOG("GS state configured for post-FX");
 
-  // Step 3: Draw full-screen textured sprite
-  // The texture is the frame buffer itself, we read its alpha
-  TYRA_LOG("Step 3: Drawing full-screen textured fog sprite...");
-  PACK_GIFTAG(q,
-              GIF_SET_TAG(2, 1, 1,
-                          GS_SET_PRIM(GS_PRIM_SPRITE,
-                                      0,  // Flat shading
-                                      1,  // Texture ON - critical!
-                                      0, 0, 0, 1, 0, 0),
-                          GIF_FLG_PACKED, 2),
-              (GIF_REG_UV) | (GIF_REG_XYZ2 << 4));
+  // Step 2: Draw full-screen quad using TRIANGLE_STRIP (more reliable than
+  // SPRITE) Using absolute coordinates (XYOFFSET is set to 0)
+  PACK_GIFTAG(
+      q,
+      GIF_SET_TAG(4, 1, 1,
+                  GS_SET_PRIM(GS_PRIM_TRIANGLE_STRIP, 0, 0, 0, 0, 0, 1, 0, 0),
+                  GIF_FLG_PACKED, 1),
+      GIF_REG_XYZ2);
   q++;
 
-  // Top-left corner (UV and XYZ)
-  // UV in 12.4 fixed point format (ftoi4 = multiply by 16)
-  PACK_GIFTAG(q, GIF_SET_UV(ftoi4(0.0f), ftoi4(0.0f)), 0);
-  q++;
-  PACK_GIFTAG(q, GIF_SET_XYZ(ftoi4(0.0f), ftoi4(0.0f), 0), 0);
+  // Vertex 1: Top-left (0, 0)
+  PACK_GIFTAG(q, GIF_SET_XYZ(0 << 4, 0 << 4, 0), 0);
   q++;
 
-  // Bottom-right corner (UV and XYZ)
-  // Map full frame buffer to full screen for 1:1 correspondence
-  PACK_GIFTAG(q, GIF_SET_UV(ftoi4((float)width), ftoi4((float)height)), 0);
-  q++;
-  PACK_GIFTAG(q, GIF_SET_XYZ(ftoi4((float)width), ftoi4((float)height), 0), 0);
+  // Vertex 2: Top-right (width, 0)
+  PACK_GIFTAG(q, GIF_SET_XYZ(width << 4, 0 << 4, 0), 0);
   q++;
 
-  // Restore XY offset and Z-buffer
+  // Vertex 3: Bottom-left (0, height)
+  PACK_GIFTAG(q, GIF_SET_XYZ(0 << 4, height << 4, 0), 0);
+  q++;
+
+  // Vertex 4: Bottom-right (width, height)
+  PACK_GIFTAG(q, GIF_SET_XYZ(width << 4, height << 4, 0), 0);
+  q++;
+
+  // Step 3: Restore original GS state
   PACK_GIFTAG(q, GIF_SET_TAG(2, 1, 0, 0, GIF_FLG_PACKED, 1), GIF_REG_AD);
   q++;
 
+  // Restore original XYOFFSET (centered)
   PACK_GIFTAG(
       q,
       GS_SET_XYOFFSET(ftoi4(screenCenter - (settings.getWidth() / 2.0F)),
@@ -898,20 +833,17 @@ void PostFxManager::renderFog(Color fog) {
   q++;
 
   // Re-enable Z-buffer writes
-  PACK_GIFTAG(q,
-              GS_SET_ZBUF(t_renderer->core.gs.zBuffer.address >> 13,
-                          t_renderer->core.gs.zBuffer.zsm, 0),
+  PACK_GIFTAG(q, GS_SET_ZBUF(zbuffer.address >> 13, zbuffer.zsm, 0),
               GS_REG_ZBUF_1 + context);
   q++;
 
-  TYRA_LOG("Total packets to send: ", q - packets);
+  TYRA_LOG("Total packets: ", q - packets);
 
-  // Send packets to GS
+  // Send to GS
   FlushCache(0);
   dma_channel_send_normal(DMA_CHANNEL_GIF, packets, q - packets, 0, 0);
   dma_wait_fast();
 
-  TYRA_LOG("Sprite rendering complete");
   TYRA_LOG("=== renderFog END ===");
 };
 
