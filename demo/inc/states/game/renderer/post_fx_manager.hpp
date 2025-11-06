@@ -22,7 +22,7 @@ class PostFxManager {
   PostFxManager(Renderer* t_renderer);
   ~PostFxManager();
 
-  void render(Color fogColor = Color(50, 50, 50));
+  void render(Color fogColor = Color(250, 50, 50));
   void dumpGsData(char* prefix, bool trap);
   void updateDebugPallet();
 
@@ -36,12 +36,11 @@ class PostFxManager {
   constexpr static float gsCenter = 4096.0F;
   constexpr static float screenCenter = gsCenter / 2.0F;
 
-  Renderer* t_renderer = nullptr;
+  Renderer* pRenderer = nullptr;
   const RendererSettings& settings;
   Color currentFogColor = Color(128, 128, 128);  // Track current fog color
 
   void init();
-  void renderFog(Color fogColor);
   void copyDepthBuffer(ColourChannels channelIn, Texture* palette);
   void scaleDepthMask(Texture* palette, uint8_t initial_value,
                       uint8_t factors[16]);
@@ -49,7 +48,7 @@ class PostFxManager {
   void performChannelCopy(ColourChannels channelIn, ColourChannels channelOut,
                           uint32_t blockX, uint32_t blockY, uint32_t source,
                           uint32_t width, uint32_t height,
-                          uint32_t paletteAddress);
+                          uint32_t paletteAddress, bool useBlending = false);
   void setTwTh(int w, int h, int* tw, int* th);
   void uploadClutToVram(Texture* texture);
 
