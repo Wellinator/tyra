@@ -16,7 +16,7 @@ using Tyra::TextureBuilderData;
 namespace Demo {
 
 void PostFxManager::dumpGsData(char* prefix, bool trap) {
-  dma_channel_wait(DMA_CHANNEL_GIF, 0);
+  // dma_channel_wait(DMA_CHANNEL_GIF, 0);
 
   RendererCoreTextureBuffers depthTexBuffer =
       pRenderer->core.texture.useTexture(pDepthBufferTexture);
@@ -36,24 +36,32 @@ void PostFxManager::dumpGsData(char* prefix, bool trap) {
   //                     fogTexBuffer.clut->psm);
 
   // uint32_t width = settings.getWidth(), height = settings.getHeight();
-  const zbuffer_t zbuffer = pRenderer->core.gs.zBuffer;
+
   // printf("zbuffer.address: %X\n", zbuffer.address);
   // ps2_screenshot_file((std::string(prefix) + "_depth_buffer.tga").c_str(),
   //                     zbuffer.address >> 6, width, height, zbuffer.zsm);
 
-  const framebuffer_t front_buffer = pRenderer->core.gs.getFrameBuffer(0);
-  printf("front_buffer.address: %X\n", front_buffer.address);
-  ps2_screenshot_file((std::string(prefix) + "_front_buffer.tga").c_str(),
-                      front_buffer.address >> 6, front_buffer.width,
-                      front_buffer.height, front_buffer.psm);
+  {
+    const framebuffer_t front_buffer = pRenderer->core.gs.getFrameBuffer(0);
+    printf("front_buffer.address: %X\n", front_buffer.address);
+    ps2_screenshot_file((std::string(prefix) + "_front_buffer.tga").c_str(),
+                        front_buffer.address >> 6, front_buffer.width,
+                        front_buffer.height, front_buffer.psm);
+  }
 
-  const framebuffer_t back_buffer = pRenderer->core.gs.getFrameBuffer(1);
-  printf("back_buffer.address: %X\n", back_buffer.address);
-  ps2_screenshot_file((std::string(prefix) + "_back_buffer.tga").c_str(),
-                      back_buffer.address >> 6, back_buffer.width,
-                      back_buffer.height, back_buffer.psm);
+  {
+    const framebuffer_t back_buffer = pRenderer->core.gs.getFrameBuffer(1);
+    printf("back_buffer.address: %X\n", back_buffer.address);
+    ps2_screenshot_file((std::string(prefix) + "_back_buffer.tga").c_str(),
+                        back_buffer.address >> 6, back_buffer.width,
+                        back_buffer.height, back_buffer.psm);
+  }
 
   if (trap) {
+    const framebuffer_t front_buffer = pRenderer->core.gs.getFrameBuffer(0);
+    const framebuffer_t back_buffer = pRenderer->core.gs.getFrameBuffer(1);
+    const zbuffer_t zbuffer = pRenderer->core.gs.zBuffer;
+
     TYRA_TRAP("GS data dumped to gs_debug folder!", "Addresses:\n",
               "front_buffer.address: ", front_buffer.address >> 6, "\n",
               "back_buffer.address: ", back_buffer.address >> 6, "\n",
@@ -101,43 +109,12 @@ void PostFxManager::render(Color fogColor) {
     applyFogColorToPalette(fogColor);
   }
 
-  // Set GS settings
-  qword_t packets[20] ALIGNED(64);
-  qword_t* q = packets;
-
-  q = draw_disable_tests(q, 0, &pRenderer->core.gs.zBuffer);
-
-  dma_channel_send_normal(DMA_CHANNEL_GIF, packets, q - packets, 0, 0);
-  dma_channel_wait(DMA_CHANNEL_GIF, 500);
-
   // Apply fog: Extract green channel from zbuffer, use it to index the fog
-  // palette, and blend the result directly onto the framebuffer This implements
-  // the classic PS2 fog post-processing technique
+  // palette, and blend the result directly onto the framebuffer
+  // This implements the classic PS2 fog post-processing technique
+  // Note: We don't need to disable tests - the fog rendering uses its own
+  // depth test configuration inside performChannelCopy
   copyDepthBuffer(CHANNEL_GREEN, pFogTexture);
-
-  // Reset GS old settings
-  q = packets;
-
-  PACK_GIFTAG(q, GIF_SET_TAG(2, 1, 0, 0, GIF_FLG_PACKED, 1), GIF_REG_AD);
-  q++;
-
-  // Alpha Blending
-  PACK_GIFTAG(q,
-              GS_SET_ALPHA(BLEND_COLOR_SOURCE, BLEND_COLOR_DEST,
-                           BLEND_ALPHA_SOURCE, BLEND_COLOR_DEST, 0x80),
-              GS_REG_ALPHA_1);
-  q++;
-
-  PACK_GIFTAG(q, GS_SET_CLAMP(WRAP_CLAMP, WRAP_CLAMP, 0, 0, 0, 0),
-              GS_REG_CLAMP_1);
-  q++;
-
-  q = draw_enable_tests(q, 0, &pRenderer->core.gs.zBuffer);
-
-  q = draw_texture_expand_alpha(q, 0x80, ALPHA_EXPAND_NORMAL, 0x80);
-
-  dma_channel_send_normal(DMA_CHANNEL_GIF, packets, q - packets, 0, 0);
-  dma_channel_wait(DMA_CHANNEL_GIF, 500);
 }
 
 void PostFxManager::init() {
@@ -242,6 +219,9 @@ void PostFxManager::updateDebugPallet() {
 
 void PostFxManager::copyDepthBuffer(ColourChannels channelIn,
                                     Texture* palette) {
+  // Wait for all previous rendering to complete before reading zbuffer
+  dma_channel_wait(DMA_CHANNEL_GIF, 0);
+
   uint32_t width = settings.getWidth(), height = settings.getHeight();
   uint32_t zbufferAddr = pRenderer->core.gs.zBuffer.address;
   RendererCoreTextureBuffers texBuffer =
@@ -321,7 +301,11 @@ void PostFxManager::performChannelCopy(ColourChannels channelIn,
   qword_t packets[500] ALIGNED(64);
   qword_t* q = packets;
 
-  PACK_GIFTAG(q, GIF_SET_TAG(5, 1, 0, 0, GIF_FLG_PACKED, 1), GIF_REG_AD);
+  // Configure registers - need 6 for blending (including ALPHA and TEST), 5
+  // otherwise
+  uint32_t regCount = useBlending ? 7 : 5;
+
+  PACK_GIFTAG(q, GIF_SET_TAG(regCount, 1, 0, 0, GIF_FLG_PACKED, 1), GIF_REG_AD);
   q++;
 
   PACK_GIFTAG(q, GS_SET_XYOFFSET(0, 0), GS_REG_XYOFFSET_1);
@@ -345,10 +329,29 @@ void PostFxManager::performChannelCopy(ColourChannels channelIn,
   PACK_GIFTAG(q, GS_SET_TEXFLUSH(1), GS_REG_TEXFLUSH);
   q++;
 
+  // Configure alpha blending and depth test for fog
+  if (useBlending) {
+    // Formula: Output = (Source * SourceAlpha) + (Dest * (1 - SourceAlpha))
+    // Source = palette color, SourceAlpha = palette alpha, Dest = framebuffer
+    PACK_GIFTAG(q,
+                GS_SET_ALPHA(BLEND_COLOR_SOURCE, BLEND_COLOR_DEST,
+                             BLEND_ALPHA_SOURCE, BLEND_COLOR_DEST, 0x00),
+                GS_REG_ALPHA_1);
+    q++;
+
+    // Enable depth test to filter fog: only pixels with depth <= 0x00ffff get
+    // fog This range covers most of the scene in a 1/z buffer ZTST=1 (LEQUAL):
+    // pass if Z <= reference (0x00ffff)
+    PACK_GIFTAG(q, GS_SET_TEST(0, 0, 0x00ffff, 1, 0, 0, 1, 1), GS_REG_TEST_1);
+    q++;
+  }
+
   uint32_t frame_mask;
   if (useBlending) {
-    // For fog blending, write to all RGB channels (preserve alpha)
-    frame_mask = 0xFF000000;  // Preserve alpha, write RGB
+    // For fog blending, don't use a mask - let blending handle everything
+    // naturally Writing with no mask and blending enabled will blend fog onto
+    // RGB channels
+    frame_mask = 0x00000000;  // No mask, write all channels
   } else {
     // For channel copy, write only to the target channel
     switch (channelOut) {
@@ -454,7 +457,11 @@ void PostFxManager::performChannelCopy(ColourChannels channelIn,
   dma_channel_wait(DMA_CHANNEL_GIF, 500);
   q = packets;
 
-  PACK_GIFTAG(q, GIF_SET_TAG(3, 1, 0, 0, GIF_FLG_PACKED, 1), GIF_REG_AD);
+  // Restore GS state - need 4 registers if blending (to disable TEST), 3
+  // otherwise
+  uint32_t restoreCount = useBlending ? 4 : 3;
+  PACK_GIFTAG(q, GIF_SET_TAG(restoreCount, 1, 0, 0, GIF_FLG_PACKED, 1),
+              GIF_REG_AD);
   q++;
 
   PACK_GIFTAG(q, GS_SET_CLAMP(WRAP_CLAMP, WRAP_CLAMP, 0, 0, 0, 0),
@@ -473,6 +480,13 @@ void PostFxManager::performChannelCopy(ColourChannels channelIn,
                   (int)(screenCenter - (settings.getHeight() / 2.0F) * 16.0f)),
               GS_REG_XYOFFSET_1);
   q++;
+
+  // If blending was used, disable depth test (restore to disabled state)
+  if (useBlending) {
+    // ZTST=0 (NEVER) or ZTST=1 with ZTE=0 to disable
+    PACK_GIFTAG(q, GS_SET_TEST(0, 0, 0, 0, 0, 0, 1, 0), GS_REG_TEST_1);
+    q++;
+  }
 
   dma_channel_send_normal(DMA_CHANNEL_GIF, packets, q - packets, 0, 0);
   dma_channel_wait(DMA_CHANNEL_GIF, 500);

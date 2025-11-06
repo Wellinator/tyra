@@ -113,9 +113,13 @@ void GameRenderer::render() {
 
   if (downloaded_frame == 0 && frame_count == 100) {
     postFx.dumpGsData("pre_fog_", false);
+  } else if (frame_count == 0) {
+    postFx.dumpGsData("frame_0_pre_fog_", false);
+  } else if (frame_count == 1) {
+    postFx.dumpGsData("frame_1_pre_fog_", false);
   }
 
-  postFx.render(Color(0, 0, 200, 128));
+  postFx.render(Color(0, 0, 200));
 
   // renderer->renderer2D.render(postFxSprite);
   // renderer->renderer2D.render(postFxDepthSprite);
@@ -124,7 +128,10 @@ void GameRenderer::render() {
     downloaded_frame = 1;
     frame_count = 0;
     return postFx.dumpGsData("post_fog_", true);
+  } else if (frame_count == 0) {
+    // postFx.dumpGsData("frame_0_post_fog_", false);
   }
+
   frame_count++;
 }
 
