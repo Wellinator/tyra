@@ -1,4 +1,5 @@
 #include "states/game/renderer/post_fx_manager.hpp"
+#include "utils/gs_debug_utils.hpp"
 #include <gs_gp.h>
 #include <gs_psm.h>
 #include <dma_tags.h>
@@ -18,8 +19,6 @@ namespace Demo {
 void PostFxManager::dumpGsData(char* prefix, bool trap) {
   // dma_channel_wait(DMA_CHANNEL_GIF, 0);
 
-  RendererCoreTextureBuffers depthTexBuffer =
-      pRenderer->core.texture.useTexture(pDepthBufferTexture);
   // ps2_screenshot_file(
   //     Tyra::FileUtils::fromCwd(std::string("gs_debug/") + prefix +
   //                              "_depth_buffer_tex.tga")
@@ -99,32 +98,159 @@ void PostFxManager::applyFogColorToPalette(Color fogColor) {
 }
 
 void PostFxManager::render(Color fogColor) {
-#ifdef DEBUG_MODE
-  if (g_debug_menu.enablePostFx == false) return;
-#endif  // DEBUG_MODE
+  // Set GS settings
+  qword_t packets[20] ALIGNED(64);
+  qword_t* q = packets;
 
-  // Update palette color if fog color changed
-  if (fogColor.r != currentFogColor.r || fogColor.g != currentFogColor.g ||
-      fogColor.b != currentFogColor.b) {
-    applyFogColorToPalette(fogColor);
+  q = draw_disable_tests(q, 0, &pRenderer->core.gs.zBuffer);
+
+  dma_channel_send_normal(DMA_CHANNEL_GIF, packets, q - packets, 0, 0);
+  dma_wait_fast();
+
+  // Apply the post effects
+  renderFog(Color(0, 0, 0, 128));
+
+  // Reset GS old settings
+  q = packets;
+
+  PACK_GIFTAG(q, GIF_SET_TAG(2, 1, 0, 0, GIF_FLG_PACKED, 1), GIF_REG_AD);
+  q++;
+
+  // Alpha Blending
+  PACK_GIFTAG(q,
+              GS_SET_ALPHA(BLEND_COLOR_SOURCE, BLEND_COLOR_DEST,
+                           BLEND_ALPHA_SOURCE, BLEND_COLOR_DEST, 0x80),
+              GS_REG_ALPHA_1);
+  q++;
+
+  PACK_GIFTAG(q, GS_SET_CLAMP(WRAP_CLAMP, WRAP_CLAMP, 0, 0, 0, 0),
+              GS_REG_CLAMP_1);
+  q++;
+
+  q = draw_enable_tests(q, 0, &pRenderer->core.gs.zBuffer);
+
+  q = draw_texture_expand_alpha(q, 0x80, ALPHA_EXPAND_NORMAL, 0x80);
+
+  dma_channel_send_normal(DMA_CHANNEL_GIF, packets, q - packets, 0, 0);
+  dma_channel_wait(DMA_CHANNEL_GIF, 0);
+
+  // GsDebugUtils::debugPackets(packets, q - packets, "Quad Render");
+  // TYRA_BREAKPOINT();
+}
+
+void PostFxManager::renderFog(Color fogColor) {
+  Color tlc = fogColor;
+  Color trc = fogColor;
+  Color blc = fogColor;
+  Color brc = fogColor;
+
+  uint64_t width = settings.getWidth(), height = settings.getHeight();
+
+  copyDepthBuffer(CHANNEL_GREEN, pFogTexture);
+
+  qword_t packets[17] ALIGNED(64);
+  qword_t* q = packets;
+
+  PACK_GIFTAG(q, GIF_SET_TAG(3, 1, 0, 0, GIF_FLG_PACKED, 1), GIF_REG_AD);
+  q++;
+
+  PACK_GIFTAG(q, GS_SET_TEST(0, 0, 0, 0, 0, 0, 1, 1), GS_REG_TEST_1);
+  q++;
+
+  // The GS's alpha blending formula is fixed but it contains four variables
+  // that can be reconfigured: Output = (((A - B) * C) >> 7) + D A, B, and D are
+  // colors and C is an alpha value. Their specific values come from the ALPHA
+  // register:
+  //       A                B                C                   D
+  //   0   Source RGB       Source RGB       Source alpha        Source RGB
+  //   1   Framebuffer RGB  Framebuffer RGB  Framebuffer alpha   Framebuffer RGB
+  //   2   0                0                FIX                 0
+  //   3   Reserved         Reserved         Reserved            Reserved
+  PACK_GIFTAG(q,
+              GS_SET_ALPHA(BLEND_COLOR_DEST, BLEND_COLOR_SOURCE,
+                           BLEND_COLOR_DEST, BLEND_COLOR_SOURCE, 0x00),
+              GS_REG_ALPHA_1);
+  q++;
+
+  PACK_GIFTAG(q, GS_SET_XYOFFSET(0, 0), GS_REG_XYOFFSET_1);
+  q++;
+
+  PACK_GIFTAG(
+      q,
+      GIF_SET_TAG(4, 1, 1,
+                  GS_SET_PRIM(GS_PRIM_TRIANGLE_STRIP, 1, 0, 0, 1, 0, 0, 0, 0),
+                  GIF_FLG_PACKED, 2),
+      (GS_REG_RGBAQ) | (GS_REG_XYZ2 << 4));
+  q++;
+
+  // LOOP 1
+  {
+    // TLC
+    // RGBAQ
+    PACK_GIFTAG(q, (uint64_t)(tlc.r) | (uint64_t)(tlc.g) << 32,
+                (uint64_t)(tlc.b) | (uint64_t)(tlc.a) << 32);
+    q++;
+
+    // XYZ2
+    PACK_GIFTAG(q, GIF_SET_XYZ(0, 0, 0), 1);
+    q++;
+
+    // TRC
+    // RGBAQ
+    PACK_GIFTAG(q, (uint64_t)(trc.r) | (uint64_t)(trc.g) << 32,
+                (uint64_t)(trc.b) | (uint64_t)(trc.a) << 32);
+    q++;
+
+    // XYZ2
+    PACK_GIFTAG(q, GIF_SET_XYZ(ftoi4(width), 0, 0), 1);
+    q++;
   }
 
-  // Apply fog: Extract green channel from zbuffer, use it to index the fog
-  // palette, and blend the result directly onto the framebuffer
-  // This implements the classic PS2 fog post-processing technique
-  // Note: We don't need to disable tests - the fog rendering uses its own
-  // depth test configuration inside performChannelCopy
-  copyDepthBuffer(CHANNEL_GREEN, pFogTexture);
-}
+  // LOOP 2
+  {
+    // BLC
+    // RGBAQ
+    PACK_GIFTAG(q, (uint64_t)(blc.r) | (uint64_t)(blc.g) << 32,
+                (uint64_t)(blc.b) | (uint64_t)(blc.a) << 32);
+    q++;
+
+    // XYZ2
+    PACK_GIFTAG(q, GIF_SET_XYZ(0, 0, ftoi4(height)), 1);
+    q++;
+
+    // BRC
+    // RGBAQ
+    PACK_GIFTAG(q, (uint64_t)(brc.r) | (uint64_t)(brc.g) << 32,
+                (uint64_t)(brc.b) | (uint64_t)(brc.a) << 32);
+    q++;
+
+    // XYZ2
+    PACK_GIFTAG(q, GIF_SET_XYZ(ftoi4(width), 0, ftoi4(height)), 1);
+    q++;
+  }
+
+  PACK_GIFTAG(q, GIF_SET_TAG(1, 1, 0, 0, GIF_FLG_PACKED, 1), GIF_REG_AD);
+  q++;
+
+  PACK_GIFTAG(q,
+              GS_SET_XYOFFSET(
+                  (int)(screenCenter - (settings.getWidth() / 2.0F) * 16.0f),
+                  (int)(screenCenter - (settings.getHeight() / 2.0F) * 16.0f)),
+              GS_REG_XYOFFSET_1);
+  q++;
+
+  dma_channel_send_normal(DMA_CHANNEL_GIF, packets, q - packets, 0, 0);
+  dma_wait_fast();
+};
 
 void PostFxManager::init() {
   // Initialize post-processing fog effect using the classic PS2 technique:
-  // 1. Extract green channel from 24-bit Z-buffer (provides good depth
+  // 1. Extract blue channel from 24-bit Z-buffer (provides good depth
   // distribution)
   // 2. Use depth value to index into a 256-entry RGBA palette texture
   // 3. Palette contains fog color with alpha gradient (near=transparent,
   // far=opaque)
-  // 4. Blend palette lookup onto framebuffer with depth test filtering
+  // 4. Blend palette lookup onto framebuffer with subtractive blending
 
   // Create temp depth buffer texture (64x32 blocks for efficient GS transfers)
   TextureBuilderData pDepthTempBuffer;
@@ -146,12 +272,8 @@ void PostFxManager::init() {
   pColorPaletteRaster.gsComponents = TEXTURE_COMPONENTS_RGBA;
   pColorPaletteRaster.data = new u8[16 * 16 * 4]{0};
 
-  // Initialize palette with transparent values
-  for (int i = 0; i < 256 * 4; i += 4) {
-    pColorPaletteRaster.data[i + 0] = 128;  // R
-    pColorPaletteRaster.data[i + 1] = 128;  // G
-    pColorPaletteRaster.data[i + 2] = 128;  // B
-    pColorPaletteRaster.data[i + 3] = 0;    // A - will be set by scaleDepthMask
+  for (int i = 0; i < 1024; i++) {
+    pColorPaletteRaster.data[i] = 128;
   }
 
   pFogTexture = new Texture(&pColorPaletteRaster);
@@ -159,12 +281,10 @@ void PostFxManager::init() {
   pRenderer->core.texture.useTexture(pFogTexture);
 
   // Setup fog depth scale - controls fog density at different depths
-  // The scale controls how fast fog increases with distance
-  // Lower values = closer to camera (less fog), higher values = farther (more
-  // fog) This creates a smooth gradient from transparent (near) to opaque (far)
-  uint8_t fog_scale[16] = {0, 1, 1,  2,  2,  3,  4,  5,
-                           6, 8, 10, 12, 16, 20, 24, 32};
-  scaleDepthMask(pFogTexture, 0, fog_scale);
+  // Using scale from GTA VL reference implementation
+  // 0 means full opaque, 128 means full transparent
+  uint8_t fog_scale[16] = {0, 1, 2, 3, 10, 7, 3, 2, 1, 1, 0, 0, 0, 0, 0, 0};
+  scaleDepthMask(pFogTexture, 1, fog_scale);
 };
 
 void PostFxManager::updateDebugPallet() {
@@ -222,6 +342,11 @@ void PostFxManager::copyDepthBuffer(ColourChannels channelIn,
   // Wait for all previous rendering to complete before reading zbuffer
   dma_channel_wait(DMA_CHANNEL_GIF, 0);
 
+  // Capture draw context once to ensure all fog rendering uses the same back
+  // buffer This is equivalent to skyFrameBit in the GTA VL reference
+  // implementation
+  const u8 drawContext = pRenderer->core.gs.getDrawContext();
+
   uint32_t width = settings.getWidth(), height = settings.getHeight();
   uint32_t zbufferAddr = pRenderer->core.gs.zBuffer.address;
   RendererCoreTextureBuffers texBuffer =
@@ -270,10 +395,10 @@ void PostFxManager::copyDepthBuffer(ColourChannels channelIn,
       dma_channel_wait(DMA_CHANNEL_GIF, 500);
 
       // For fog, blend the palette colors onto RGB channels using alpha
-      // blending For other effects, copy to a specific channel
+      // blending Pass the captured context to ensure all blocks use the same
+      // framebuffer
       performChannelCopy(channelIn, CHANNEL_ALPHA, x, y, buf_addr, width,
-                         height, pal_addr,
-                         true);  // true = use blending for fog
+                         height, pal_addr, true, drawContext);
 
       page += 32;
     }
@@ -285,8 +410,11 @@ void PostFxManager::performChannelCopy(ColourChannels channelIn,
                                        uint32_t blockX, uint32_t blockY,
                                        uint32_t source_addr, uint32_t width,
                                        uint32_t height, uint32_t pal_addr,
-                                       bool useBlending) {
-  const framebuffer_t buf_frame = pRenderer->core.gs.getCurrentFrameData();
+                                       bool useBlending, u8 gsContext) {
+  // Use framebuffer from the captured draw context (back buffer)
+  // This ensures we're drawing to the correct buffer based on the context
+  // captured once at the start (equivalent to skyFrameBit in GTA VL reference)
+  const framebuffer_t buf_frame = pRenderer->core.gs.getFrameBuffer(gsContext);
 
   // For the BLUE and ALPHA channels, we need to offset our 'U's by 8 texels
   const uint32_t horz_block_offset =
@@ -301,11 +429,7 @@ void PostFxManager::performChannelCopy(ColourChannels channelIn,
   qword_t packets[500] ALIGNED(64);
   qword_t* q = packets;
 
-  // Configure registers - need 6 for blending (including ALPHA and TEST), 5
-  // otherwise
-  uint32_t regCount = useBlending ? 7 : 5;
-
-  PACK_GIFTAG(q, GIF_SET_TAG(regCount, 1, 0, 0, GIF_FLG_PACKED, 1), GIF_REG_AD);
+  PACK_GIFTAG(q, GIF_SET_TAG(5, 1, 0, 0, GIF_FLG_PACKED, 1), GIF_REG_AD);
   q++;
 
   PACK_GIFTAG(q, GS_SET_XYOFFSET(0, 0), GS_REG_XYOFFSET_1);
@@ -329,48 +453,23 @@ void PostFxManager::performChannelCopy(ColourChannels channelIn,
   PACK_GIFTAG(q, GS_SET_TEXFLUSH(1), GS_REG_TEXFLUSH);
   q++;
 
-  // Configure alpha blending and depth test for fog
-  if (useBlending) {
-    // Formula: Output = (Source * SourceAlpha) + (Dest * (1 - SourceAlpha))
-    // Source = palette color, SourceAlpha = palette alpha, Dest = framebuffer
-    PACK_GIFTAG(q,
-                GS_SET_ALPHA(BLEND_COLOR_SOURCE, BLEND_COLOR_DEST,
-                             BLEND_ALPHA_SOURCE, BLEND_COLOR_DEST, 0x00),
-                GS_REG_ALPHA_1);
-    q++;
-
-    // Enable depth test to filter fog: only pixels with depth <= 0x00ffff get
-    // fog This range covers most of the scene in a 1/z buffer ZTST=1 (LEQUAL):
-    // pass if Z <= reference (0x00ffff)
-    PACK_GIFTAG(q, GS_SET_TEST(0, 0, 0x00ffff, 1, 0, 0, 1, 1), GS_REG_TEST_1);
-    q++;
-  }
-
   uint32_t frame_mask;
-  if (useBlending) {
-    // For fog blending, don't use a mask - let blending handle everything
-    // naturally Writing with no mask and blending enabled will blend fog onto
-    // RGB channels
-    frame_mask = 0x00000000;  // No mask, write all channels
-  } else {
-    // For channel copy, write only to the target channel
-    switch (channelOut) {
-      case CHANNEL_RED:
-        frame_mask = ~0x000000FF;
-        break;
-      case CHANNEL_GREEN:
-        frame_mask = ~0x0000FF00;
-        break;
-      case CHANNEL_BLUE:
-        frame_mask = ~0x00FF0000;
-        break;
-      case CHANNEL_ALPHA:
-        frame_mask = ~0xFF000000;
-        break;
-      default:
-        frame_mask = ~0x00FF0000;
-        break;
-    }
+  switch (channelOut) {
+    case CHANNEL_RED:
+      frame_mask = ~0x000000FF;
+      break;
+    case CHANNEL_GREEN:
+      frame_mask = ~0x0000FF00;
+      break;
+    case CHANNEL_BLUE:
+      frame_mask = ~0x00FF0000;
+      break;
+    case CHANNEL_ALPHA:
+      frame_mask = ~0xFF000000;
+      break;
+    default:
+      frame_mask = ~0x0000FF00;
+      break;
   }
 
   PACK_GIFTAG(q,
@@ -379,13 +478,9 @@ void PostFxManager::performChannelCopy(ColourChannels channelIn,
               GS_REG_FRAME_1);
   q++;
 
-  // For fog blending, enable alpha blending; for channel copy, disable it
-  uint32_t prim_flags = useBlending ? 1 : 0;  // ABE (alpha blend enable)
-
   PACK_GIFTAG(
       q,
-      GIF_SET_TAG(96, 1, 1,
-                  GS_SET_PRIM(GS_PRIM_SPRITE, 0, 1, 0, prim_flags, 0, 1, 0, 0),
+      GIF_SET_TAG(96, 1, 1, GS_SET_PRIM(GS_PRIM_SPRITE, 0, 1, 0, 0, 0, 1, 0, 0),
                   GIF_FLG_PACKED, 4),
       (GIF_REG_UV) | (GIF_REG_XYZ2 << 4) | (GIF_REG_UV << 8) |
           (GIF_REG_XYZ2 << 12));
@@ -457,11 +552,8 @@ void PostFxManager::performChannelCopy(ColourChannels channelIn,
   dma_channel_wait(DMA_CHANNEL_GIF, 500);
   q = packets;
 
-  // Restore GS state - need 4 registers if blending (to disable TEST), 3
-  // otherwise
-  uint32_t restoreCount = useBlending ? 4 : 3;
-  PACK_GIFTAG(q, GIF_SET_TAG(restoreCount, 1, 0, 0, GIF_FLG_PACKED, 1),
-              GIF_REG_AD);
+  // Restore GS state using correct context registers
+  PACK_GIFTAG(q, GIF_SET_TAG(3, 1, 0, 0, GIF_FLG_PACKED, 1), GIF_REG_AD);
   q++;
 
   PACK_GIFTAG(q, GS_SET_CLAMP(WRAP_CLAMP, WRAP_CLAMP, 0, 0, 0, 0),
@@ -481,13 +573,6 @@ void PostFxManager::performChannelCopy(ColourChannels channelIn,
               GS_REG_XYOFFSET_1);
   q++;
 
-  // If blending was used, disable depth test (restore to disabled state)
-  if (useBlending) {
-    // ZTST=0 (NEVER) or ZTST=1 with ZTE=0 to disable
-    PACK_GIFTAG(q, GS_SET_TEST(0, 0, 0, 0, 0, 0, 1, 0), GS_REG_TEST_1);
-    q++;
-  }
-
   dma_channel_send_normal(DMA_CHANNEL_GIF, packets, q - packets, 0, 0);
   dma_channel_wait(DMA_CHANNEL_GIF, 500);
 };
@@ -502,46 +587,72 @@ void PostFxManager::setTwTh(int w, int h, int* tw, int* th) {
 
 void PostFxManager::scaleDepthMask(Texture* palette, uint8_t initial_value,
                                    uint8_t factors[16]) {
-  // Setup fog intensity curve across the 256-entry palette
-  // Each palette entry corresponds to a depth value (0-255 from green channel)
-  // Lower indices = closer to camera (less fog)
-  // Higher indices = farther from camera (more fog)
-  //
-  // The factor_order follows GS swizzled memory layout for optimal access
-  // patterns
-  static const uint8_t factor_order[16][2] = {
-      {0, 7},    {8, 15},    {16, 23},   {24, 31},  {32, 39}, {40, 47},
-      {48, 55},  {56, 63},   {64, 71},   {72, 79},  {80, 87}, {88, 95},
-      {96, 103}, {104, 111}, {112, 119}, {120, 127}};
+  // // Setup fog intensity curve across the 256-entry palette
+  // // Each palette entry corresponds to a depth value (0-255 from blue
+  // channel)
+  // // With subtractive blending: 0 = full opaque, 128 = full transparent
+  // // Lower indices = closer to camera (more fog visibility)
+  // // Higher indices = farther from camera (less fog visibility)
+  // //
+  // // The factor_order follows GS swizzled memory layout for optimal access
+  // // patterns (from GTA VL reference)
+  // static const uint8_t factor_order[16][2] = {
+  //     {0, 7},     {16, 23},   {8, 15},    {24, 39},  {48, 55},   {40, 47},
+  //     {56, 71},   {80, 87},   {72, 79},   {88, 103}, {112, 119}, {104, 111},
+  //     {120, 135}, {144, 151}, {136, 143}, {152, 255}};
 
-  u8* pal_data = palette->core->data;
-  uint8_t alpha_value = initial_value;
+  // u8* pal_data = palette->core->data;
+  // uint8_t alpha_value = initial_value;
 
-  // Apply fog intensity gradients across the 256-entry palette
-  // Alpha value increases with distance, creating depth-based fog
-  for (int j = 0; j < 16; j++) {
-    for (int i = factor_order[j][0]; i <= factor_order[j][1]; i++) {
-      // Set alpha channel to control fog intensity (0 = transparent, 128 =
-      // opaque) RGB channels are set by applyFogColorToPalette() based on fog
-      // color
-      pal_data[i * 4 + 3] = alpha_value;  // Alpha channel
+  // // Apply fog intensity gradients across palette
+  // // With subtractive blending, lower alpha = more fog, higher alpha = less
+  // fog for (int j = 0; j < 16; j++) {
+  //   for (int i = factor_order[j][0]; i <= factor_order[j][1]; i++) {
+  //     // Set alpha channel to control fog intensity
+  //     // RGB channels are set by applyFogColorToPalette() based on fog color
+  //     pal_data[i * 4 + 3] = alpha_value;  // Alpha channel
 
-      // Increment alpha for next group (non-linear fog falloff)
-      if (alpha_value < 128) {
-        alpha_value += factors[j];
-        if (alpha_value > 128) alpha_value = 128;
+  //     // Increment alpha for next group (non-linear fog falloff)
+  //     if (alpha_value < 128) {
+  //       alpha_value += factors[j];
+  //       if (alpha_value > 128) alpha_value = 128;
+  //     }
+  //   }
+  // }
+
+  // // Note: Palette data will be uploaded to VRAM when first used via
+  // // useTexture()
+
+  int i, j, k = initial_value;
+
+  static const uint8_t factor_order[18][2] = {
+      {0, 3},   {4, 7},   {16, 19},   {20, 23},   {8, 15},    {24, 31},
+      {40, 47}, {32, 39}, {48, 55},   {34, 71},   {56, 63},   {72, 79},
+      {88, 95}, {80, 87}, {112, 119}, {104, 111}, {120, 127}, {136, 143}};
+
+  uint32_t* pal_rgba = reinterpret_cast<uint32_t*>(palette->core->data);
+
+  printf("pallet: \n");
+
+  for (j = 0; j < 16; j++) {
+    // k = initial_value;
+
+    for (i = factor_order[j][0]; i <= factor_order[j][1]; i++) {
+      pal_rgba[i] = (k << 24) | (k << 16) | (k << 8) | k;  // RGBA
+
+      printf("%i,", k);
+
+      if (k < 128 || factors[j] >= 128)
+      // if (k <= 128)
+      {
+        k += factors[j];
+      } else if (k != 128) {
+        k = 128;
       }
     }
   }
 
-  // Fill remaining entries (128-255) with maximum fog
-  // These represent very far distances or depths beyond 0x00ffff range
-  for (int i = 128; i < 256; i++) {
-    pal_data[i * 4 + 3] = 128;
-  }
-
-  // Note: Palette data will be uploaded to VRAM when first used via
-  // useTexture()
+  pRenderer->core.texture.updateTextureInfo(palette);
 }
 
 }  // namespace Demo

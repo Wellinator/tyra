@@ -91,15 +91,38 @@ void GameRenderer::render() {
   Threading::switchThread();  // give some time for audio thread
 
   // Render animated stuff
-  if (dynamicPairs.size()) {
-    renderer->renderer3D.usePipeline(&dypip);
+  // if (dynamicPairs.size()) {
+  //   renderer->renderer3D.usePipeline(&dypip);
 
-    for (auto& pair : dynamicPairs) {
-      dypip.render(pair->mesh, pair->options);
-    }
-  }
+  //   for (auto& pair : dynamicPairs) {
+  //     dypip.render(pair->mesh, pair->options);
+  //   }
+  // }
 
   Threading::switchThread();
+
+  // if (downloaded_frame == 0 && frame_count == 100) {
+  //   postFx.dumpGsData("pre_fog_", false);
+  // } else if (frame_count == 0) {
+  //   postFx.dumpGsData("frame_0_pre_fog_", false);
+  // } else if (frame_count == 1) {
+  //   postFx.dumpGsData("frame_1_pre_fog_", false);
+  // }
+
+  postFx.render(Color(0, 0, 200, 128));
+
+  // renderer->renderer2D.render(postFxSprite);
+  // renderer->renderer2D.render(postFxDepthSprite);
+
+  // if (downloaded_frame == 0 && frame_count == 100) {
+  //   downloaded_frame = 1;
+  //   frame_count = 0;
+  //   return postFx.dumpGsData("post_fog_", false);
+  // } else if (frame_count == 0) {
+  //   postFx.dumpGsData("frame_0_post_fog_", false);
+  // } else if (frame_count == 1) {
+  //   postFx.dumpGsData("frame_1_post_fog_", false);
+  // }
 
   // Render 2D
   for (auto& sprite : sprites) {
@@ -107,30 +130,9 @@ void GameRenderer::render() {
   }
 
   // Render debug stuff after stapip/dynpip, otherwise it will not be visible
-  for (auto& bbox : bboxes) {
-    renderer->renderer3D.utility.drawBBox(bbox);
-  }
-
-  if (downloaded_frame == 0 && frame_count == 100) {
-    postFx.dumpGsData("pre_fog_", false);
-  } else if (frame_count == 0) {
-    postFx.dumpGsData("frame_0_pre_fog_", false);
-  } else if (frame_count == 1) {
-    postFx.dumpGsData("frame_1_pre_fog_", false);
-  }
-
-  postFx.render(Color(0, 0, 200));
-
-  // renderer->renderer2D.render(postFxSprite);
-  // renderer->renderer2D.render(postFxDepthSprite);
-
-  if (downloaded_frame == 0 && frame_count == 100) {
-    downloaded_frame = 1;
-    frame_count = 0;
-    return postFx.dumpGsData("post_fog_", true);
-  } else if (frame_count == 0) {
-    // postFx.dumpGsData("frame_0_post_fog_", false);
-  }
+  // for (auto& bbox : bboxes) {
+  //   renderer->renderer3D.utility.drawBBox(bbox);
+  // }
 
   frame_count++;
 }
